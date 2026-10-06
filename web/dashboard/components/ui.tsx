@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, Eye, EyeOff, Loader2, X } from "lucide-react";
-import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 export function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -27,7 +27,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50",
         size === "sm" ? "h-8 px-3 text-sm" : "h-10 px-4 text-sm",
         styles[variant],
         className,
@@ -86,8 +86,12 @@ export function Field({ label, hint, children }: { label: string; hint?: ReactNo
   );
 }
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("rounded-xl border border-border bg-card", className)}>{children}</div>;
+export function Card({ className, children, style }: { className?: string; children: ReactNode; style?: CSSProperties }) {
+  return (
+    <div className={cn("rounded-xl border border-border bg-card", className)} style={style}>
+      {children}
+    </div>
+  );
 }
 
 export function CardHeader({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {
@@ -189,8 +193,11 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-[10vh]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={title} className={cn("w-full rounded-xl border border-border bg-card shadow-2xl", wide ? "max-w-2xl" : "max-w-md")}>
+    <div
+      className="animate-fade-in fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-[10vh] backdrop-blur-sm"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div role="dialog" aria-modal="true" aria-label={title} className={cn("animate-pop-in w-full rounded-xl border border-border bg-card shadow-2xl", wide ? "max-w-2xl" : "max-w-md")}>
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="font-display font-semibold">{title}</h2>
           <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground" aria-label="Close">
@@ -210,6 +217,42 @@ export function ErrorText({ error }: { error: unknown }) {
     <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
       {msg}
     </p>
+  );
+}
+
+/** A shimmering placeholder block. */
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn("skeleton", className)} aria-hidden />;
+}
+
+/** Placeholder grid of cards while a list loads. */
+export function SkeletonCards({ count = 3 }: { count?: number }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="rounded-xl border border-border bg-card p-5" style={{ animationDelay: `${i * 60}ms` }}>
+          <div className="flex items-center gap-3">
+            <Skeleton className="size-11 rounded-xl" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+          <Skeleton className="mt-6 h-3 w-2/3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Placeholder rows for tables and panels. */
+export function SkeletonRows({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="space-y-3 p-5" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: rows }, (_, i) => (
+        <Skeleton key={i} className="h-5" />
+      ))}
+    </div>
   );
 }
 

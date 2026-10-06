@@ -103,12 +103,26 @@ func (s *Server) projectRoutes() {
 		if err != nil {
 			return err
 		}
+		ids := make([]string, len(list))
+		for i := range list {
+			ids[i] = list[i].ID
+		}
+		kinds, err := s.Store.ProjectServiceKinds(r.Context(), ids)
+		if err != nil {
+			return err
+		}
 		out := []map[string]any{}
 		for i := range list {
 			if p.Key != nil && p.Key.ProjectID != nil && *p.Key.ProjectID != list[i].ID {
 				continue
 			}
-			out = append(out, s.projectJSON(&list[i]))
+			j := s.projectJSON(&list[i])
+			k := kinds[list[i].ID]
+			if k == nil {
+				k = []string{}
+			}
+			j["serviceKinds"] = k
+			out = append(out, j)
 		}
 		return httpx.OK(w, map[string]any{"projects": out})
 	})

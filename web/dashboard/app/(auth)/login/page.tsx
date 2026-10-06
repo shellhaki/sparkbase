@@ -28,7 +28,6 @@ export default function LoginPage() {
   return (
     <AuthCard
       title="Sign in"
-      description="Use the email and password for this Sparkbase install."
       footer="New here? Ask your admin for an invite."
     >
       <form

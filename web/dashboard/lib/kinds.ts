@@ -1,5 +1,3 @@
-import { Database, HardDrive, ListOrdered, ShieldCheck, Sparkles, Zap } from "lucide-react";
-
 export interface Resource {
   id: string;
   projectId: string;
@@ -15,15 +13,6 @@ export interface Resource {
   createdAt: string;
   apiUrl: string;
 }
-
-export const KIND_ICON: Record<string, typeof Database> = {
-  postgres: Database,
-  cache: Zap,
-  storage: HardDrive,
-  vector: Sparkles,
-  queue: ListOrdered,
-  auth: ShieldCheck,
-};
 
 export const KINDS = ["postgres", "cache", "storage", "vector", "queue", "auth"];
 

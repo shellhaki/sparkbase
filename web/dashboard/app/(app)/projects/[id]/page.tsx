@@ -1,13 +1,14 @@
 "use client";
 
-import { Boxes, Plus, RotateCw, Trash2 } from "lucide-react";
+import { Plus, RotateCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/shell";
-import { Badge, Button, Card, CardHeader, CodeBlock, ConfirmModal, CopyField, Empty, ErrorText, Field, Input, Modal, Select, Spinner, StatusDot, cn } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, CodeBlock, ConfirmModal, CopyField, ErrorText, Field, Input, Modal, Select, Skeleton, SkeletonCards, StatusDot, cn } from "@/components/ui";
 import { KIND_BLURB, KIND_LABEL, api, useApi } from "@/lib/api";
-import { KIND_ICON, KINDS, type Resource } from "@/lib/kinds";
+import { ServiceLogo } from "@/components/logos/service-logo";
+import { KINDS, type Resource } from "@/lib/kinds";
 
 interface Project {
   id: string;
@@ -70,7 +71,6 @@ function AddServiceModal({ open, onClose, project, onAdded, hasAuth }: { open: b
       >
         <div className="grid gap-2 sm:grid-cols-2">
           {KINDS.map((k) => {
-            const Icon = KIND_ICON[k];
             const disabled = k === "auth" && hasAuth;
             return (
               <button
@@ -79,11 +79,11 @@ function AddServiceModal({ open, onClose, project, onAdded, hasAuth }: { open: b
                 disabled={disabled}
                 onClick={() => setKind(k)}
                 className={cn(
-                  "flex gap-3 rounded-lg border p-3 text-left transition-colors disabled:opacity-40",
-                  kind === k ? "border-brand bg-brand/5" : "border-border hover:bg-accent/50",
+                  "flex items-start gap-3 rounded-xl border p-3 text-left transition-all disabled:opacity-40",
+                  kind === k ? "border-brand bg-brand/5 shadow-[0_0_0_3px_color-mix(in_srgb,var(--brand)_15%,transparent)]" : "border-border hover:border-brand/40 hover:bg-accent/40",
                 )}
               >
-                <Icon className="mt-0.5 size-5 shrink-0 text-brand" />
+                <ServiceLogo kind={k} size="sm" />
                 <span>
                   <span className="block text-sm font-medium">{KIND_LABEL[k]}</span>
                   <span className="block text-xs text-muted-foreground">{disabled ? "This project already has auth." : KIND_BLURB[k]}</span>
@@ -126,13 +126,13 @@ function ConnectCard({ project }: { project: Project }) {
   if (!data) return null;
   return (
     <Card>
-      <CardHeader title="Connect your app" description="Use the project URL and a key with the SDK or plain HTTP." />
+      <CardHeader title="Connect" />
       <div className="grid gap-4 p-5 lg:grid-cols-2">
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <CopyField label="Project URL" value={data.url} />
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1">
-              <CopyField label="Publishable key — safe in browsers, auth routes only" value={data.publishableKey} />
+              <CopyField label="Publishable key · browser safe" value={data.publishableKey} />
             </div>
             <Button variant="ghost" size="sm" onClick={() => setRotating("publishable")} aria-label="Rotate publishable key">
               <RotateCw className="size-4" />
@@ -140,7 +140,7 @@ function ConnectCard({ project }: { project: Project }) {
           </div>
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1">
-              <CopyField label="Secret key — server only, full access" value={data.secretKey} secret />
+              <CopyField label="Secret key · server only" value={data.secretKey} secret />
             </div>
             <Button variant="ghost" size="sm" onClick={() => setRotating("secret")} aria-label="Rotate secret key">
               <RotateCw className="size-4" />
@@ -148,17 +148,15 @@ function ConnectCard({ project }: { project: Project }) {
           </div>
         </div>
         <CodeBlock
+          className="min-w-0"
           code={`npm install @sparkbase/sdk
 
 import { createClient } from '@sparkbase/sdk'
 
 const sb = createClient(
-  process.env.SPARKBASE_URL,        // ${data.url}
+  process.env.SPARKBASE_URL,
   process.env.SPARKBASE_SECRET_KEY,
-)
-
-# or pull everything into .env:
-sparkbase link ${project.ref} && sparkbase env pull`}
+)`}
         />
       </div>
       <ConfirmModal
@@ -192,7 +190,17 @@ export default function ProjectPage() {
     return () => clearInterval(t);
   }, [provisioning, reload]);
 
-  if (loading) return <Spinner />;
+  if (loading)
+    return (
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-7 w-56" />
+        </div>
+        <Skeleton className="h-56 rounded-xl" />
+        <SkeletonCards count={3} />
+      </div>
+    );
   if (error || !data) return <ErrorText error={error ?? "Project not found"} />;
   const { project, resources } = data;
 
@@ -232,38 +240,41 @@ export default function ProjectPage() {
             </Button>
           </div>
           {resources.length === 0 ? (
-            <Card>
-              <Empty title="No services yet" action={<Button onClick={() => setAdding(true)}>Add your first service</Button>}>
-                Add only what your app needs. Each service gets its own credentials and limits.
-              </Empty>
-            </Card>
+            <button
+              onClick={() => setAdding(true)}
+              className="animate-fade-up flex w-full flex-col items-center gap-4 rounded-xl border border-dashed border-border px-6 py-12 transition-colors hover:border-brand/50 hover:bg-card"
+            >
+              <div className="flex gap-2">
+                {KINDS.map((k, i) => (
+                  <span key={k} className="animate-fade-up" style={{ animationDelay: `${i * 60}ms` }}>
+                    <ServiceLogo kind={k} />
+                  </span>
+                ))}
+              </div>
+              <span className="text-sm font-medium">Add your first service</span>
+            </button>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {resources.map((r) => {
-                const Icon = KIND_ICON[r.kind] ?? Boxes;
-                return (
-                  <Link key={r.id} href={`/projects/${project.id}/services/${r.id}`} className="group">
-                    <Card className="h-full p-5 transition-colors group-hover:border-brand/50">
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-brand/10 p-2">
-                          <Icon className="size-5 text-brand" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate font-medium">{r.name}</div>
-                          <div className="text-xs text-muted-foreground">{KIND_LABEL[r.kind]}</div>
-                        </div>
+              {resources.map((r, i) => (
+                <Link key={r.id} href={`/projects/${project.id}/services/${r.id}`} className="group animate-fade-up" style={{ animationDelay: `${i * 50}ms` }}>
+                  <Card className="card-hover h-full p-5">
+                    <div className="flex items-center gap-3">
+                      <ServiceLogo kind={r.kind} />
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{r.name}</div>
+                        <div className="text-xs text-muted-foreground">{KIND_LABEL[r.kind]}</div>
                       </div>
-                      <div className="mt-5 flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5">
-                          <StatusDot status={r.status} /> {r.status}
-                          {r.writeLocked && <Badge tone="paused">read-only</Badge>}
-                        </span>
-                        <span className="text-muted-foreground">{r.plan.replace(`${r.kind}-`, "")}</span>
-                      </div>
-                    </Card>
-                  </Link>
-                );
-              })}
+                    </div>
+                    <div className="mt-5 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 capitalize">
+                        <StatusDot status={r.status} /> {r.status}
+                        {r.writeLocked && <Badge tone="paused">read-only</Badge>}
+                      </span>
+                      <span className="text-muted-foreground capitalize">{r.plan.replace(`${r.kind}-`, "")}</span>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
             </div>
           )}
         </section>

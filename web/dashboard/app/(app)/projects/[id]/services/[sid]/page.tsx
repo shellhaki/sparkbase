@@ -10,9 +10,10 @@ import { QueueBrowser } from "@/components/browsers/queue";
 import { StorageBrowser } from "@/components/browsers/storage";
 import { VectorBrowser } from "@/components/browsers/vector";
 import { PageHeader } from "@/components/shell";
-import { Badge, Button, Card, CardHeader, CodeBlock, ConfirmModal, CopyField, ErrorText, Field, Input, Meter, Select, Spinner, StatusDot, Table, Tabs, Td } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, CodeBlock, ConfirmModal, CopyField, ErrorText, Field, Input, Meter, Select, Skeleton, StatusDot, Table, Tabs, Td } from "@/components/ui";
 import { KIND_LABEL, api, formatBytes, timeAgo, useApi } from "@/lib/api";
-import { KIND_ICON, type Resource } from "@/lib/kinds";
+import { ServiceLogo } from "@/components/logos/service-logo";
+import { type Resource } from "@/lib/kinds";
 
 type Tab = "overview" | "data" | "backups" | "settings";
 
@@ -75,9 +76,9 @@ function Overview({ r }: { r: Resource }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-5">
-      <div className="space-y-6 lg:col-span-3">
+      <div className="min-w-0 space-y-6 lg:col-span-3">
         <Card>
-          <CardHeader title="Use it from your app" description="Through the project API with the SDK, or natively." />
+          <CardHeader title="Use it" />
           <div className="space-y-4 p-5">
             <CopyField label="Service API URL" value={r.apiUrl} />
             <CodeBlock code={snippet(r)} />
@@ -111,9 +112,9 @@ function Overview({ r }: { r: Resource }) {
         )}
         <ErrorText error={error} />
       </div>
-      <div className="space-y-6 lg:col-span-2">
+      <div className="min-w-0 space-y-6 lg:col-span-2">
         <Card>
-          <CardHeader title="Usage" description="Sampled every minute." />
+          <CardHeader title="Usage" />
           <div className="space-y-4 p-5">
             {(USAGE_ROWS[r.kind] ?? []).map((row) => {
               const used = usage?.usage[row.metric] ?? 0;
@@ -364,9 +365,24 @@ export default function ServicePage() {
     return () => clearInterval(t);
   }, [r?.status, reload]);
 
-  if (loading) return <Spinner />;
+  if (loading)
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-14 rounded-2xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+        </div>
+        <Skeleton className="h-9 w-full max-w-md" />
+        <div className="grid gap-6 lg:grid-cols-5">
+          <Skeleton className="h-72 rounded-xl lg:col-span-3" />
+          <Skeleton className="h-72 rounded-xl lg:col-span-2" />
+        </div>
+      </div>
+    );
   if (error || !r) return <ErrorText error={error ?? "Service not found"} />;
-  const Icon = KIND_ICON[r.kind];
   const hasBackups = ["postgres", "vector", "queue", "auth"].includes(r.kind);
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: "overview", label: "Overview" },
@@ -381,7 +397,7 @@ export default function ServicePage() {
         back={<Link href={`/projects/${id}`}>← Project</Link>}
         title={
           <span className="flex items-center gap-3">
-            <Icon className="size-6 text-brand" /> {r.name}
+            <ServiceLogo kind={r.kind} size="lg" /> {r.name}
           </span>
         }
         description={
@@ -392,8 +408,17 @@ export default function ServicePage() {
         }
       />
       {r.status === "provisioning" ? (
-        <Card>
-          <Spinner label="Creating the service. This takes a few seconds." />
+        <Card className="overflow-hidden">
+          <div className="relative h-1 overflow-hidden bg-muted">
+            <div className="progress-bar absolute inset-y-0 w-1/3 rounded-full bg-brand" />
+          </div>
+          <div className="flex items-center gap-4 p-6">
+            <ServiceLogo kind={r.kind} size="lg" />
+            <div>
+              <p className="font-medium">Creating {r.name}</p>
+              <p className="text-sm text-muted-foreground">Usually a few seconds.</p>
+            </div>
+          </div>
         </Card>
       ) : r.status === "failed" ? (
         <Settings r={r} reload={reload} />

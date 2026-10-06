@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, timeAgo } from "@/lib/api";
-import { Spinner, cn } from "./ui";
+import { cn } from "./ui";
 
 export interface Me {
   id: string;
@@ -61,7 +61,7 @@ function Notifications() {
         {unread > 0 && <span className="absolute top-1 right-1 size-2 rounded-full bg-brand" />}
       </button>
       {open && (
-        <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-border bg-card shadow-xl">
+        <div className="animate-pop-in absolute right-0 z-40 mt-2 w-80 rounded-xl border border-border bg-card shadow-xl">
           <div className="border-b border-border px-4 py-2.5 text-sm font-medium">Notifications</div>
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 && <p className="px-4 py-6 text-center text-sm text-muted-foreground">Nothing yet.</p>}
@@ -74,6 +74,18 @@ function Notifications() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Shown while the session loads: the mark with a soft pulse. */
+function BootSplash() {
+  return (
+    <div className="animate-fade-in flex min-h-dvh items-center justify-center" aria-busy="true" aria-label="Loading Sparkbase">
+      <div className="relative flex size-16 items-center justify-center">
+        <span className="pulse-ring absolute inset-0 rounded-full bg-brand/30" />
+        <Image src="/mark.png" alt="" width={36} height={36} priority className="relative" />
+      </div>
     </div>
   );
 }
@@ -100,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => setNavOpen(false), [pathname]);
 
-  if (!user) return <Spinner />;
+  if (!user) return <BootSplash />;
 
   const nav = [
     { href: "/", label: "Projects", icon: FolderKanban, active: pathname === "/" || pathname.startsWith("/projects") },
@@ -113,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-dvh">
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-border bg-background transition-transform md:static md:translate-x-0",
+            "fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-border bg-background transition-transform md:sticky md:top-0 md:h-dvh md:translate-x-0",
             navOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
@@ -130,10 +142,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={n.href}
                 href={n.href}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   n.active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                 )}
               >
+                {n.active && <span className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full bg-brand" />}
                 <n.icon className="size-4" />
                 {n.label}
               </Link>
@@ -155,15 +168,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
         {navOpen && <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setNavOpen(false)} />}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-14 items-center gap-2 border-b border-border px-4">
+          <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur">
             <button className="rounded p-2 md:hidden" onClick={() => setNavOpen(true)} aria-label="Open menu">
               <Menu className="size-4" />
             </button>
+            <Link href="/" className="flex items-center gap-2 md:hidden">
+              <Image src="/mark.png" alt="" width={20} height={20} />
+              <span className="font-display text-sm font-semibold">Sparkbase</span>
+            </Link>
             <div className="ml-auto">
               <Notifications />
             </div>
           </header>
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 md:px-8">{children}</main>
+          <main key={pathname} className="animate-fade-up mx-auto w-full max-w-6xl flex-1 px-4 py-8 md:px-8">
+            {children}
+          </main>
         </div>
       </div>
     </SessionContext.Provider>

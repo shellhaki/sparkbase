@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PageHeader, useSession } from "@/components/shell";
-import { Badge, Button, Card, CardHeader, CopyField, ErrorText, Field, Input, Modal, Select, Spinner, StatusDot, Table, Tabs, Td, Textarea } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, CopyField, ErrorText, Field, Input, Modal, Select, SkeletonCards, SkeletonRows, StatusDot, Table, Tabs, Td, Textarea } from "@/components/ui";
 import { KIND_LABEL, api, timeAgo, useApi } from "@/lib/api";
 import type { Resource } from "@/lib/kinds";
+import { ServiceLogo } from "@/components/logos/service-logo";
 
 type Tab = "users" | "services" | "plans" | "hosts" | "settings" | "activity" | "health";
 
@@ -187,8 +188,8 @@ function Services() {
           {data?.resources.map((r) => (
             <tr key={r.id}>
               <Td>
-                <Link className="hover:underline" href={`/projects/${r.projectId}/services/${r.id}`}>
-                  {r.name}
+                <Link className="flex items-center gap-2 hover:underline" href={`/projects/${r.projectId}/services/${r.id}`}>
+                  <ServiceLogo kind={r.kind} size="sm" /> {r.name}
                 </Link>
               </Td>
               <Td>{KIND_LABEL[r.kind]}</Td>
@@ -546,7 +547,7 @@ function InstallSettings() {
   useEffect(() => {
     if (data) setForm(data.settings);
   }, [data]);
-  if (!form) return <Spinner />;
+  if (!form) return <SkeletonRows rows={5} />;
   return (
     <Card>
       <CardHeader title="Install settings" description={data?.smtpConfigured ? "Email is configured." : "Email is not configured: invite and reset links are shown to admins instead."} />
@@ -624,7 +625,7 @@ function Health() {
   const { data: jobs } = useApi<{ jobs: Array<{ id: number; type: string; status: string; attempts: number; lastError: string | null; createdAt: string }> }>(
     "/v1/admin/jobs?status=failed&limit=50",
   );
-  if (!status) return <Spinner />;
+  if (!status) return <SkeletonCards count={3} />;
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-4">
@@ -687,7 +688,7 @@ export default function AdminPage() {
   if (user.role !== "admin") return null;
   return (
     <>
-      <PageHeader title="Admin" description="Run this Sparkbase install." />
+      <PageHeader title="Admin" />
       <div className="space-y-6">
         <Tabs
           value={tab}

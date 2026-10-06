@@ -103,3 +103,24 @@ func (s *Store) APIKeyByHash(ctx context.Context, hash string) (*APIKey, error) 
 		returning `+apiKeyCols, hash)
 	return k, err
 }
+
+// ProjectServiceKinds returns the service kinds in each of the given projects.
+func (s *Store) ProjectServiceKinds(ctx context.Context, projectIDs []string) (map[string][]string, error) {
+	rows, err := s.q.Query(ctx, `
+		select project_id::text, kind from resources
+		where project_id = any($1::uuid[]) and status <> 'deleting'
+		order by created_at`, projectIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var pid, kind string
+		if err := rows.Scan(&pid, &kind); err != nil {
+			return nil, err
+		}
+		out[pid] = append(out[pid], kind)
+	}
+	return out, rows.Err()
+}
