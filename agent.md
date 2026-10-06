@@ -23,8 +23,8 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 
 - No ORM and no query builder. Hand-written, parameterized SQL in small query functions.
 - Never log passwords, keys, tokens or connection strings (the first-run setup token is the one allowed exception).
-- Credentials encrypted with AES-256-GCM. Account keys, session tokens and one-time tokens stored only as hashes.
-- Email-only authentication with magic links, for dashboard users and for the project auth service. No passwords.
+- Credentials encrypted with AES-256-GCM. Passwords argon2id; account keys, session tokens and one-time tokens stored only as SHA-256 hashes.
+- Email and password sign-in for dashboard users and the project auth service (argon2id). Nothing may depend on SMTP being configured.
 - Every service has its own role, credentials and namespace. The project API runs as the service's own credentials.
 - Every long operation is a job, and every job step is idempotent.
 - Traefik is networking only. Nothing in the API or worker depends on it being present.
@@ -54,11 +54,11 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 
 **0.3 Database and migrations.** pgx pool, embedded migrations, `schema_migrations`, seeds for plans (every kind) and settings. *Done when:* migrating twice changes nothing and a test checks every table.
 
-**0.4 Crypto.** AES-GCM, tokens, account keys `sb_`, project keys `sbp_`/`sbs_`. *Done when:* round trips, tamper and wrong-key tests pass.
+**0.4 Crypto.** AES-GCM, argon2id, tokens, account keys `sb_`, project keys `sbp_`/`sbs_`. *Done when:* round trips, tamper and wrong-key tests pass.
 
 **0.5 First-run setup.** Setup token printed once, `GET/POST /v1/setup`. *Done when:* setup works once, wrong token refused, `setup_closed` after.
 
-**0.6 Accounts, sessions, invites.** Email-only sign-in with magic links (no passwords): request link, verify link, invites, open signup mode, logout, `/v1/me`, admin users, invites, settings, logging mailer, rate limits per email and IP. *Done when:* integration tests cover setup to admin to invite to member sign-in, links being single use and expiring, a disabled user refused, and identical responses for known and unknown emails.
+**0.6 Accounts, sessions, invites.** Email and password: setup, login with lockout, invites with password, open signup mode, password reset by email and by admin-made link, password change, logout, `/v1/me`, admin users and settings, logging mailer. *Done when:* integration tests cover setup to admin to invite to member sign-in, lockout, resets being single use, a disabled user refused, and identical responses for known and unknown emails.
 
 **0.7 Account keys, middleware, rate limits.** *Done when:* valid, revoked, expired and wrong-project keys and 429 with headers are tested.
 
@@ -68,7 +68,7 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 
 **0.10 Hosts and scheduler.** Admin host endpoints, bootstrap hosts from env, weighted least-loaded choice, host bootstrap that revokes `PUBLIC` connect. *Done when:* draining hosts are skipped and bootstrap is idempotent.
 
-**0.11 Dashboard shell.** Next.js on Bun: setup, magic-link sign-in, invite acceptance, project list, project page with URL and keys, admin users and invites.
+**0.11 Dashboard shell.** Next.js on Bun: setup, sign-in, password reset, invite acceptance, project list, project page with URL and keys, admin users and invites.
 
 ## Stage 1: Database service
 
@@ -92,7 +92,7 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 
 **2.4 Queues.** Create queues, send with delay, receive with visibility timeout, ack, nack, dead letters, stats.
 
-**2.5 Auth.** Magic link and 6-digit code by email, verify, refresh with rotation, logout, user get and update, admin users and generate-link, settings; HS256 JWTs; one auth service per project; user limit.
+**2.5 Auth.** Email and password sign-up and sign-in, recovery by link or code, optional passwordless link or code, refresh with rotation and reuse detection, logout, user get and update, admin users and generate-link, settings; HS256 JWTs; one auth service per project; user limit.
 
 **2.6 Request metering.** Redis counters per service, monthly limit, flush to `usage_samples`.
 

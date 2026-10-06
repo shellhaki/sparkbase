@@ -3,8 +3,11 @@ create extension if not exists pgcrypto;
 create table users (
   id                uuid primary key default gen_random_uuid(),
   email             text not null unique,
+  password_hash     text not null,            -- argon2id
   name              text,
   role              text not null default 'member' check (role in ('admin','member')),
+  failed_logins     int not null default 0,
+  locked_until      timestamptz,
   last_login_at     timestamptz,
   disabled_at       timestamptz,
   created_at        timestamptz not null default now()
@@ -19,10 +22,10 @@ create table sessions (
 );
 create index sessions_user_idx on sessions (user_id);
 
--- One-time tokens. Sign-in is email only: a magic link proves the address.
+-- One-time tokens: first-run setup, password resets and invites.
 create table auth_tokens (
   id         uuid primary key default gen_random_uuid(),
-  kind       text not null check (kind in ('setup','magic_link','invite')),
+  kind       text not null check (kind in ('setup','password_reset','invite')),
   user_id    uuid references users(id) on delete cascade,
   email      text,
   token_hash text not null unique,

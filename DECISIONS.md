@@ -3,8 +3,9 @@
 One line per decision: date, choice, reason.
 
 - 2026-10-06: Backend in Go (one module in `server/`), frontend Next.js on Bun, SDK built with Bun. No pnpm. Owner's choice.
-- 2026-10-06: Email-only, magic-link authentication everywhere (dashboard users and the project `auth` service). No passwords. Owner's choice.
-- 2026-10-06: Without SMTP, magic links and invite links are logged by the server and invite links are returned to the admin; the auth service exposes `generate-link` so apps can send their own email.
+- 2026-10-06: Email and password authentication (argon2id) for dashboard users and the project `auth` service. Owner's choice, replacing an earlier magic-link-only plan: self-hosted installs often have no SMTP.
+- 2026-10-06: Nothing needs SMTP. Invite links are returned to the admin, admins can create password reset links, and the auth service exposes `generate-link`. With SMTP, the same links are also emailed.
+- 2026-10-06: The auth service keeps a passwordless link-and-code flow (`/auth/otp`, `/auth/verify`) as an option; it also powers password recovery.
 - 2026-10-06: Development and tests run without Docker. `scripts/dev-services.sh` starts private Postgres clusters (control and data host) and Redis from local binaries.
 - 2026-10-06: Project URL is path based, `{PUBLIC_API_URL}/p/{ref}`, so no extra DNS is needed. Project keys: publishable `sbp_` (auth routes only), secret `sbs_` (everything).
 - 2026-10-06: `vector`, `queue` and `auth` services each get their own database and role on a Postgres host, the same isolation unit as `postgres`.

@@ -38,3 +38,16 @@ func TestKeys(t *testing.T) {
 		t.Fatal("hash mismatch")
 	}
 }
+
+func TestPasswords(t *testing.T) {
+	h := HashPassword("correct horse")
+	if !strings.HasPrefix(h, "$argon2id$") || !VerifyPassword("correct horse", h) {
+		t.Fatal("valid password refused")
+	}
+	if VerifyPassword("wrong", h) || VerifyPassword("correct horse", "garbage") {
+		t.Fatal("invalid password accepted")
+	}
+	if ValidPassword("short") || !ValidPassword("long enough") {
+		t.Fatal("password policy")
+	}
+}

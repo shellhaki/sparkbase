@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const userCols = `id, email, name, role, last_login_at, disabled_at, created_at`
+const userCols = `id, email, password_hash, name, role, failed_logins, locked_until, last_login_at, disabled_at, created_at`
 
 func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int
@@ -14,10 +14,10 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	return n, err
 }
 
-func (s *Store) CreateUser(ctx context.Context, email string, name *string, role string) (*User, error) {
+func (s *Store) CreateUser(ctx context.Context, email, passwordHash string, name *string, role string) (*User, error) {
 	u, err := one[User](ctx, s.q, `
-		insert into users (email, name, role) values (lower($1), $2, $3)
-		returning `+userCols, email, name, role)
+		insert into users (email, password_hash, name, role) values (lower($1), $2, $3, $4)
+		returning `+userCols, email, passwordHash, name, role)
 	if IsUniqueViolation(err) {
 		return nil, ErrConflict
 	}
@@ -52,7 +52,28 @@ func (s *Store) SetUserDisabled(ctx context.Context, id string, disabled bool) e
 }
 
 func (s *Store) TouchLogin(ctx context.Context, id string) error {
-	_, err := exec(ctx, s.q, `update users set last_login_at = now() where id = $1`, id)
+	_, err := exec(ctx, s.q, `update users set last_login_at = now(), failed_logins = 0, locked_until = null where id = $1`, id)
+	return err
+}
+
+func (s *Store) SetUserPassword(ctx context.Context, id, hash string) error {
+	_, err := exec(ctx, s.q, `update users set password_hash = $2, failed_logins = 0, locked_until = null where id = $1`, id, hash)
+	return err
+}
+
+// RecordFailedLogin counts a wrong password and locks the account for
+// lockFor once the count reaches max.
+func (s *Store) RecordFailedLogin(ctx context.Context, id string, max int, lockFor time.Duration) error {
+	_, err := exec(ctx, s.q, `
+		update users set failed_logins = failed_logins + 1,
+		  locked_until = case when failed_logins + 1 >= $2 then now() + make_interval(secs => $3) else locked_until end
+		where id = $1`, id, max, lockFor.Seconds())
+	return err
+}
+
+// ConsumeUserTokens marks every unused token of a kind for a user as used.
+func (s *Store) ConsumeUserTokens(ctx context.Context, userID, kind string) error {
+	_, err := exec(ctx, s.q, `update auth_tokens set used_at = now() where user_id = $1 and kind = $2 and used_at is null`, userID, kind)
 	return err
 }
 
@@ -71,7 +92,8 @@ func (s *Store) CreateSession(ctx context.Context, userID, tokenHash string, exp
 
 func (s *Store) UserBySession(ctx context.Context, tokenHash string) (*User, error) {
 	return one[User](ctx, s.q, `
-		select u.id, u.email, u.name, u.role, u.last_login_at, u.disabled_at, u.created_at
+		select u.id, u.email, u.password_hash, u.name, u.role, u.failed_logins, u.locked_until,
+		       u.last_login_at, u.disabled_at, u.created_at
 		from sessions s join users u on u.id = s.user_id
 		where s.token_hash = $1 and s.expires_at > now()`, tokenHash)
 }
@@ -91,7 +113,7 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context) error {
 	return err
 }
 
-// Auth tokens: setup, magic_link, invite.
+// Auth tokens: setup, password_reset, invite.
 
 const tokenCols = `id, kind, user_id, email, role, invited_by, expires_at, used_at, created_at`
 

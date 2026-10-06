@@ -14,7 +14,11 @@ import (
 	"github.com/shellhaki/sparkbase/server/internal/store"
 )
 
-const magicLinkTTL = 15 * time.Minute
+const (
+	resetTTL        = time.Hour
+	maxLoginFails   = 10
+	loginLockPeriod = 15 * time.Minute
+)
 
 // NormalizeEmail validates and lowercases an address.
 func NormalizeEmail(s string) (string, bool) {
@@ -28,6 +32,8 @@ func NormalizeEmail(s string) (string, bool) {
 	}
 	return s, true
 }
+
+var errWeakPassword = httpx.Invalid("password must be 8 to 256 characters")
 
 // IssueSetupToken creates a fresh one-time setup token while the install has
 // no users. It returns "" once setup is closed.
@@ -58,13 +64,29 @@ func trimName(name *string) *string {
 	return &n
 }
 
+// CreatePasswordResetLink makes a one-time reset link for a user.
+func (s *Server) CreatePasswordResetLink(ctx context.Context, u *store.User) (string, error) {
+	raw := sbcrypto.Token()
+	if _, err := s.Store.CreateAuthToken(ctx, store.NewAuthToken{
+		Kind: "password_reset", UserID: &u.ID, Email: &u.Email,
+		TokenHash: sbcrypto.SHA256Hex(raw), ExpiresAt: time.Now().Add(resetTTL),
+	}); err != nil {
+		return "", err
+	}
+	return s.Cfg.DashboardURL + "/reset-password?token=" + raw, nil
+}
+
 func (s *Server) accountRoutes() {
 	s.handle("GET /v1/setup", func(w http.ResponseWriter, r *http.Request) error {
 		n, err := s.Store.CountUsers(r.Context())
 		if err != nil {
 			return err
 		}
-		return httpx.OK(w, map[string]any{"open": n == 0})
+		st, err := s.Settings(r.Context())
+		if err != nil {
+			return err
+		}
+		return httpx.OK(w, map[string]any{"open": n == 0, "signupMode": st.SignupMode, "smtpConfigured": s.Mail.Configured()})
 	})
 
 	s.handle("POST /v1/setup", func(w http.ResponseWriter, r *http.Request) error {
@@ -72,9 +94,10 @@ func (s *Server) accountRoutes() {
 			return err
 		}
 		var in struct {
-			Token string  `json:"token"`
-			Email string  `json:"email"`
-			Name  *string `json:"name"`
+			Token    string  `json:"token"`
+			Email    string  `json:"email"`
+			Password string  `json:"password"`
+			Name     *string `json:"name"`
 		}
 		if err := httpx.Decode(r, &in, 0); err != nil {
 			return err
@@ -84,6 +107,10 @@ func (s *Server) accountRoutes() {
 		if !ok {
 			return httpx.Invalid("enter a valid email address")
 		}
+		if !sbcrypto.ValidPassword(in.Password) {
+			return errWeakPassword
+		}
+		hash := sbcrypto.HashPassword(in.Password)
 		var u *store.User
 		err := s.Store.Tx(ctx, func(tx *store.Store) error {
 			if err := tx.XactLock(ctx, 727275); err != nil {
@@ -102,7 +129,7 @@ func (s *Server) accountRoutes() {
 				}
 				return err
 			}
-			u, err = tx.CreateUser(ctx, email, trimName(in.Name), "admin")
+			u, err = tx.CreateUser(ctx, email, hash, trimName(in.Name), "admin")
 			return err
 		})
 		if err != nil {
@@ -115,8 +142,92 @@ func (s *Server) accountRoutes() {
 		return httpx.WriteJSON(w, 201, map[string]any{"user": u})
 	})
 
-	s.handle("POST /v1/auth/magic-link", func(w http.ResponseWriter, r *http.Request) error {
-		if err := s.ipLimit(w, r, "magic", 20, 10*time.Minute); err != nil {
+	s.handle("POST /v1/auth/login", func(w http.ResponseWriter, r *http.Request) error {
+		if err := s.ipLimit(w, r, "login", 30, 10*time.Minute); err != nil {
+			return err
+		}
+		var in struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
+		if err := httpx.Decode(r, &in, 0); err != nil {
+			return err
+		}
+		ctx := r.Context()
+		wrong := httpx.Unauthorized("wrong email or password")
+		email, ok := NormalizeEmail(in.Email)
+		if !ok {
+			sbcrypto.DummyVerify(in.Password)
+			return wrong
+		}
+		u, err := s.Store.GetUserByEmail(ctx, email)
+		if errors.Is(err, store.ErrNotFound) {
+			sbcrypto.DummyVerify(in.Password)
+			return wrong
+		}
+		if err != nil {
+			return err
+		}
+		if u.LockedUntil != nil && u.LockedUntil.After(time.Now()) {
+			sbcrypto.DummyVerify(in.Password)
+			return httpx.E(429, "account_locked", "too many wrong passwords; try again in a few minutes or reset your password")
+		}
+		if !sbcrypto.VerifyPassword(in.Password, u.PasswordHash) {
+			_ = s.Store.RecordFailedLogin(ctx, u.ID, maxLoginFails, loginLockPeriod)
+			return wrong
+		}
+		if u.DisabledAt != nil {
+			return httpx.Unauthorized("this account is disabled")
+		}
+		if err := s.startSession(ctx, w, u); err != nil {
+			return err
+		}
+		return httpx.OK(w, map[string]any{"user": u})
+	})
+
+	s.handle("POST /v1/auth/signup", func(w http.ResponseWriter, r *http.Request) error {
+		if err := s.ipLimit(w, r, "signup", 10, 10*time.Minute); err != nil {
+			return err
+		}
+		var in struct {
+			Email    string  `json:"email"`
+			Password string  `json:"password"`
+			Name     *string `json:"name"`
+		}
+		if err := httpx.Decode(r, &in, 0); err != nil {
+			return err
+		}
+		ctx := r.Context()
+		st, err := s.Settings(ctx)
+		if err != nil {
+			return err
+		}
+		if st.SignupMode != "open" {
+			return httpx.Forbidden("sign-ups are invite only on this install; ask an admin for an invite")
+		}
+		email, ok := NormalizeEmail(in.Email)
+		if !ok {
+			return httpx.Invalid("enter a valid email address")
+		}
+		if !sbcrypto.ValidPassword(in.Password) {
+			return errWeakPassword
+		}
+		u, err := s.Store.CreateUser(ctx, email, sbcrypto.HashPassword(in.Password), trimName(in.Name), "member")
+		if errors.Is(err, store.ErrConflict) {
+			return httpx.Conflict("an account with this email exists; sign in instead")
+		}
+		if err != nil {
+			return err
+		}
+		s.Audit(ctx, u.ID, "", "user.signup", nil)
+		if err := s.startSession(ctx, w, u); err != nil {
+			return err
+		}
+		return httpx.WriteJSON(w, 201, map[string]any{"user": u})
+	})
+
+	s.handle("POST /v1/auth/password/reset", func(w http.ResponseWriter, r *http.Request) error {
+		if err := s.ipLimit(w, r, "reset", 10, 10*time.Minute); err != nil {
 			return err
 		}
 		var in struct {
@@ -125,52 +236,69 @@ func (s *Server) accountRoutes() {
 		if err := httpx.Decode(r, &in, 0); err != nil {
 			return err
 		}
+		ctx := r.Context()
+		// Same answer whether or not the account exists.
+		sent := map[string]any{"sent": true, "emailEnabled": s.Mail.Configured()}
 		email, ok := NormalizeEmail(in.Email)
 		if !ok {
 			return httpx.Invalid("enter a valid email address")
 		}
-		ctx := r.Context()
-		// Per-email limit; over it we silently skip sending so the response
-		// stays the same for every address.
-		if res, err := s.Limiter.Allow(ctx, "magic:email:"+sbcrypto.SHA256Hex(email), 5, 15*time.Minute); err == nil && !res.Allowed {
-			return httpx.OK(w, map[string]any{"sent": true})
+		if res, err := s.Limiter.Allow(ctx, "reset:email:"+sbcrypto.SHA256Hex(email), 3, 15*time.Minute); err == nil && !res.Allowed {
+			return httpx.OK(w, sent)
 		}
-		if err := s.sendMagicLink(ctx, email); err != nil {
+		u, err := s.Store.GetUserByEmail(ctx, email)
+		if err != nil || u.DisabledAt != nil {
+			return httpx.OK(w, sent)
+		}
+		link, err := s.CreatePasswordResetLink(ctx, u)
+		if err != nil {
 			return err
 		}
-		return httpx.OK(w, map[string]any{"sent": true})
+		if err := s.Mail.Send(ctx, sbmail.Message{
+			To: u.Email, Subject: "Reset your Sparkbase password", Link: link,
+			Text: "Open this link to choose a new password:\n\n" + link + "\n\nIt works once and expires in one hour. If you did not ask for it, ignore this email.\n",
+		}); err != nil {
+			s.Log.Warn("reset email failed", "err", err.Error())
+		}
+		return httpx.OK(w, sent)
 	})
 
-	s.handle("POST /v1/auth/magic-link/verify", func(w http.ResponseWriter, r *http.Request) error {
-		if err := s.ipLimit(w, r, "verify", 30, 10*time.Minute); err != nil {
+	s.handle("POST /v1/auth/password/reset/confirm", func(w http.ResponseWriter, r *http.Request) error {
+		if err := s.ipLimit(w, r, "reset", 20, 10*time.Minute); err != nil {
 			return err
 		}
 		var in struct {
-			Token string `json:"token"`
+			Token    string `json:"token"`
+			Password string `json:"password"`
 		}
 		if err := httpx.Decode(r, &in, 0); err != nil {
 			return err
 		}
+		if !sbcrypto.ValidPassword(in.Password) {
+			return errWeakPassword
+		}
 		ctx := r.Context()
-		tok, err := s.Store.ConsumeAuthToken(ctx, "magic_link", sbcrypto.SHA256Hex(strings.TrimSpace(in.Token)))
+		tok, err := s.Store.ConsumeAuthToken(ctx, "password_reset", sbcrypto.SHA256Hex(strings.TrimSpace(in.Token)))
 		if errors.Is(err, store.ErrNotFound) {
-			return httpx.Unauthorized("this sign-in link is invalid, used or expired; request a new one")
+			return httpx.Unauthorized("this reset link is invalid, used or expired; request a new one")
 		}
 		if err != nil {
 			return err
 		}
-		var u *store.User
-		if tok.UserID != nil {
-			u, err = s.Store.GetUser(ctx, *tok.UserID)
-		} else {
-			u, err = s.signupFromLink(ctx, *tok.Email)
-		}
+		u, err := s.Store.GetUser(ctx, *tok.UserID)
 		if err != nil {
 			return err
 		}
 		if u.DisabledAt != nil {
 			return httpx.Unauthorized("this account is disabled")
 		}
+		if err := s.Store.SetUserPassword(ctx, u.ID, sbcrypto.HashPassword(in.Password)); err != nil {
+			return err
+		}
+		// A reset signs out every other session.
+		_ = s.Store.DeleteUserSessions(ctx, u.ID)
+		_ = s.Store.ConsumeUserTokens(ctx, u.ID, "password_reset")
+		s.Audit(ctx, u.ID, "", "user.password_reset", nil)
 		if err := s.startSession(ctx, w, u); err != nil {
 			return err
 		}
@@ -196,13 +324,18 @@ func (s *Server) accountRoutes() {
 			return err
 		}
 		var in struct {
-			Token string  `json:"token"`
-			Name  *string `json:"name"`
+			Token    string  `json:"token"`
+			Password string  `json:"password"`
+			Name     *string `json:"name"`
 		}
 		if err := httpx.Decode(r, &in, 0); err != nil {
 			return err
 		}
+		if !sbcrypto.ValidPassword(in.Password) {
+			return errWeakPassword
+		}
 		ctx := r.Context()
+		hash := sbcrypto.HashPassword(in.Password)
 		var u *store.User
 		err := s.Store.Tx(ctx, func(tx *store.Store) error {
 			inv, err := tx.ConsumeAuthToken(ctx, "invite", sbcrypto.SHA256Hex(strings.TrimSpace(in.Token)))
@@ -216,7 +349,7 @@ func (s *Server) accountRoutes() {
 			if inv.Role != nil {
 				role = *inv.Role
 			}
-			u, err = tx.CreateUser(ctx, *inv.Email, trimName(in.Name), role)
+			u, err = tx.CreateUser(ctx, *inv.Email, hash, trimName(in.Name), role)
 			if errors.Is(err, store.ErrConflict) {
 				return httpx.Conflict("an account with this email already exists; sign in instead")
 			}
@@ -246,15 +379,32 @@ func (s *Server) accountRoutes() {
 
 	s.user("PATCH /v1/me", func(w http.ResponseWriter, r *http.Request, p *principal) error {
 		var in struct {
-			Name *string `json:"name"`
+			Name            *string `json:"name"`
+			CurrentPassword string  `json:"currentPassword"`
+			NewPassword     string  `json:"newPassword"`
 		}
 		if err := httpx.Decode(r, &in, 0); err != nil {
 			return err
 		}
-		if err := s.Store.UpdateUserProfile(r.Context(), p.User.ID, trimName(in.Name)); err != nil {
-			return err
+		ctx := r.Context()
+		if in.Name != nil {
+			if err := s.Store.UpdateUserProfile(ctx, p.User.ID, trimName(in.Name)); err != nil {
+				return err
+			}
 		}
-		u, err := s.Store.GetUser(r.Context(), p.User.ID)
+		if in.NewPassword != "" {
+			if !sbcrypto.VerifyPassword(in.CurrentPassword, p.User.PasswordHash) {
+				return httpx.E(403, "wrong_password", "the current password is wrong")
+			}
+			if !sbcrypto.ValidPassword(in.NewPassword) {
+				return errWeakPassword
+			}
+			if err := s.Store.SetUserPassword(ctx, p.User.ID, sbcrypto.HashPassword(in.NewPassword)); err != nil {
+				return err
+			}
+			s.Audit(ctx, p.User.ID, "", "user.password_change", nil)
+		}
+		u, err := s.Store.GetUser(ctx, p.User.ID)
 		if err != nil {
 			return err
 		}
@@ -335,61 +485,4 @@ func (s *Server) accountRoutes() {
 		}
 		return httpx.NoContent(w)
 	})
-}
-
-// sendMagicLink emails a sign-in link to an existing account, or a sign-up
-// link when open signup is on. Unknown emails in invite mode get nothing.
-func (s *Server) sendMagicLink(ctx context.Context, email string) error {
-	u, err := s.Store.GetUserByEmail(ctx, email)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		return err
-	}
-	tok := store.NewAuthToken{Kind: "magic_link", Email: &email, ExpiresAt: time.Now().Add(magicLinkTTL)}
-	subject := "Your Sparkbase sign-in link"
-	if u != nil {
-		if u.DisabledAt != nil {
-			return nil
-		}
-		tok.UserID = &u.ID
-	} else {
-		settings, err := s.Settings(ctx)
-		if err != nil {
-			return err
-		}
-		if settings.SignupMode != "open" {
-			return nil
-		}
-		subject = "Create your Sparkbase account"
-	}
-	raw := sbcrypto.Token()
-	tok.TokenHash = sbcrypto.SHA256Hex(raw)
-	if _, err := s.Store.CreateAuthToken(ctx, tok); err != nil {
-		return err
-	}
-	link := s.Cfg.DashboardURL + "/auth/verify?token=" + raw
-	return s.Mail.Send(ctx, sbmail.Message{
-		To: email, Subject: subject, Link: link,
-		Text: "Open this link to sign in to Sparkbase:\n\n" + link + "\n\nIt works once and expires in 15 minutes. If you did not ask for it, ignore this email.\n",
-	})
-}
-
-func (s *Server) signupFromLink(ctx context.Context, email string) (*store.User, error) {
-	if u, err := s.Store.GetUserByEmail(ctx, email); err == nil {
-		return u, nil
-	}
-	settings, err := s.Settings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if settings.SignupMode != "open" {
-		return nil, httpx.Forbidden("sign-ups are closed on this install; ask an admin for an invite")
-	}
-	u, err := s.Store.CreateUser(ctx, email, nil, "member")
-	if errors.Is(err, store.ErrConflict) {
-		return s.Store.GetUserByEmail(ctx, email)
-	}
-	if err == nil {
-		s.Audit(ctx, u.ID, "", "user.signup", nil)
-	}
-	return u, err
 }

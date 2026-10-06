@@ -2,6 +2,9 @@
 package sbcrypto
 
 import (
+	"crypto/subtle"
+	"fmt"
+
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -10,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"golang.org/x/crypto/argon2"
 	"math/big"
 	"strings"
 )
@@ -113,3 +117,51 @@ func NewKey(prefix string) (full, display string) {
 	full = prefix + RandomString(40)
 	return full, full[:len(prefix)+8]
 }
+
+// Argon2id parameters (OWASP baseline).
+const (
+	argonTime    = 2
+	argonMemory  = 19 * 1024
+	argonThreads = 1
+	argonKeyLen  = 32
+)
+
+// HashPassword returns an encoded argon2id hash.
+func HashPassword(password string) string {
+	salt := RandomBytes(16)
+	sum := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s", argonMemory, argonTime, argonThreads,
+		base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(sum))
+}
+
+// VerifyPassword checks a password against an encoded argon2id hash.
+func VerifyPassword(password, encoded string) bool {
+	parts := strings.Split(encoded, "$")
+	if len(parts) != 6 || parts[1] != "argon2id" {
+		return false
+	}
+	var m, t uint32
+	var p uint8
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &m, &t, &p); err != nil {
+		return false
+	}
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil {
+		return false
+	}
+	want, err := base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil {
+		return false
+	}
+	got := argon2.IDKey([]byte(password), salt, t, m, p, uint32(len(want)))
+	return subtle.ConstantTimeCompare(got, want) == 1
+}
+
+var dummyHash = HashPassword("sparkbase-dummy-password")
+
+// DummyVerify spends the same time as a real check, so unknown emails cannot
+// be told apart by timing.
+func DummyVerify(password string) { VerifyPassword(password, dummyHash) }
+
+// ValidPassword reports whether a password meets the minimum policy.
+func ValidPassword(p string) bool { return len(p) >= 8 && len(p) <= 256 }

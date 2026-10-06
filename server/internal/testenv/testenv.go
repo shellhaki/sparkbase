@@ -261,6 +261,15 @@ func (r *Resp) Must(t *testing.T, status int) *Resp {
 	return r
 }
 
+// Password is used for every test account.
+const Password = "correct horse battery"
+
+// Login signs in with email and password in a new client.
+func (e *Env) Login(email, password string) (*Client, *Resp) {
+	c := e.Client()
+	return c, c.Do("POST", "/v1/auth/login", map[string]any{"email": email, "password": password})
+}
+
 // Admin completes first-run setup and returns a signed-in admin client.
 func (e *Env) Admin() *Client {
 	e.T.Helper()
@@ -269,7 +278,7 @@ func (e *Env) Admin() *Client {
 		e.T.Fatalf("setup token: %v", err)
 	}
 	c := e.Client()
-	c.Do("POST", "/v1/setup", map[string]any{"token": tok, "email": "admin@example.com", "name": "Admin"}).Must(e.T, 201)
+	c.Do("POST", "/v1/setup", map[string]any{"token": tok, "email": "admin@example.com", "password": Password, "name": "Admin"}).Must(e.T, 201)
 	return c
 }
 
@@ -280,7 +289,7 @@ func (e *Env) Invite(admin *Client, email, role string) *Client {
 	link := res.Str("link")
 	token := link[strings.Index(link, "token=")+6:]
 	c := e.Client()
-	c.Do("POST", "/v1/auth/invites/accept", map[string]any{"token": token, "name": email}).Must(e.T, 201)
+	c.Do("POST", "/v1/auth/invites/accept", map[string]any{"token": token, "password": Password, "name": email}).Must(e.T, 201)
 	return c
 }
 

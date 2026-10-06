@@ -44,7 +44,7 @@ The product is a few nouns: an **operator** runs an install, **users** own **pro
 | Plan | A named limits preset for one service kind | Defined by the admin. No prices. Seeded with Small, Medium and Large |
 | Host | A server that holds many services of one engine | Invisible to members; chosen by the scheduler |
 
-**How people sign in.** Email only, with magic links. There are no passwords anywhere in Sparkbase: a user enters their email, gets a one-time link, and opening it signs them in. Without an SMTP server, links are written to the server logs, and invite links are shown to the admin who created them.
+**How people sign in.** Email and password. Self-hosted installs often have no SMTP server, so nothing depends on email: invite links are shown to the admin who creates them, and an admin can create a password reset link for any user. When SMTP is configured, invites and reset links are also emailed.
 
 **Who can sign up.** Signup is invite-only by default. An admin invites people by email (or copies the invite link when no SMTP server is configured). An admin can switch the install to open signup. The first admin is created during first-run setup.
 
@@ -57,7 +57,7 @@ The product is a few nouns: an **operator** runs an install, **users** own **pro
 | Object storage | `storage` | Garage (S3) or local disk | Upload, download, list, delete, signed URLs | S3 API (Garage backend) | First release |
 | Vector database | `vector` | pgvector on the Postgres hosts | Collections, upsert, similarity query | Postgres wire | First release |
 | Queues | `queue` | Postgres (`SKIP LOCKED`) on the Postgres hosts | Create queues, send, receive, ack, nack | none | First release |
-| Auth | `auth` | Postgres on the Postgres hosts, JWT | Email magic link and one-time code, refresh, user, admin users | none | First release |
+| Auth | `auth` | Postgres on the Postgres hosts, JWT | Email and password sign-up and sign-in, refresh, recovery, optional magic link or code, admin users | none | First release |
 | NoSQL | `mongo` | MongoDB | later | Mongo wire | Later |
 | Realtime | `realtime` | built in | later | WebSocket | Later |
 
@@ -138,7 +138,7 @@ Every project has one URL and two kinds of project key.
 
 | Key | Prefix | Where it goes | Can do |
 | --- | --- | --- | --- |
-| Publishable | `sbp_` | Browsers and mobile apps | Auth public routes (send magic link, verify, refresh, sign out, current user) and nothing else |
+| Publishable | `sbp_` | Browsers and mobile apps | Auth public routes (sign up, sign in, refresh, recover, sign out, current user) and nothing else |
 | Secret | `sbs_` | Servers only | Every project API route for every service in the project |
 
 Keys are sent in the `apikey` header, or as `Authorization: Bearer <key>` when no end-user token is sent. An end user's access token from the auth service goes in `Authorization: Bearer <jwt>` together with the `apikey` header.
@@ -202,7 +202,7 @@ An install runs shared hosts, and every service gets an isolated slice of one. U
 
 **Queue specifics.** Each queue is a row in the service's `queues` table, and messages live in its `messages` table. Receiving uses `FOR UPDATE SKIP LOCKED` and sets a visibility timeout. A message received more than `max_receives` times moves to the dead-letter state.
 
-**Auth specifics.** Email only, no passwords. An app calls `POST /auth/otp` with an email; the service emails a magic link and a 6-digit code (both one-time, 15 minutes). `POST /auth/verify` with the link token or the email and code returns a session, creating the user on first sign-in when sign-ups are allowed. Without SMTP, the app's server can call `POST /auth/admin/generate-link` with the secret key and send the email itself. End users, one-time codes, refresh tokens and settings live in the service's own database. Access tokens are HS256 JWTs signed with the service's secret, valid for one hour by default; refresh tokens are random, stored hashed, and rotate on every use. The JWT secret is shown to the owner so their own server can verify tokens.
+**Auth specifics.** Email and password first: `POST /auth/signup` and `POST /auth/token?grant_type=password` return a session. Passwords are argon2id. `POST /auth/recover` emails a one-time link and 6-digit code; verifying it returns a session and the app sets a new password with `PUT /auth/user`. The same link and code flow (`POST /auth/otp`, `POST /auth/verify`) is available for passwordless sign-in. Links only go to the site URL or an allowlisted redirect. Without SMTP, the app's server calls `POST /auth/admin/generate-link` with the secret key and sends the email itself. Access tokens are HS256 JWTs signed with the service's secret, valid for one hour by default; refresh tokens are random, stored hashed, and rotate on every use. The JWT secret is shown to the owner so their own server can verify tokens.
 
 **Storage specifics.** Two backends, chosen per storage host:
 
@@ -236,8 +236,11 @@ create extension if not exists pgcrypto;
 create table users (
   id                uuid primary key default gen_random_uuid(),
   email             text not null unique,
+  password_hash     text not null,     -- argon2id
   name              text,
   role              text not null default 'member' check (role in ('admin','member')),
+  failed_logins     int not null default 0,
+  locked_until      timestamptz,
   last_login_at     timestamptz,
   disabled_at       timestamptz,
   created_at        timestamptz not null default now()
@@ -251,9 +254,9 @@ create table sessions (
   created_at timestamptz not null default now()
 );
 
-create table auth_tokens (           -- setup, magic links, invites
+create table auth_tokens (           -- setup, password resets, invites
   id         uuid primary key default gen_random_uuid(),
-  kind       text not null check (kind in ('setup','magic_link','invite')),
+  kind       text not null check (kind in ('setup','password_reset','invite')),
   user_id    uuid references users(id) on delete cascade,
   email      text,
   token_hash text not null unique,
@@ -362,7 +365,7 @@ The backend is one Go module. One binary, `sparkbase-server`, runs the API, the 
 | Redis driver | `redis/go-redis/v9` | Mature, supports ACL commands |
 | Validation | Small typed request structs with explicit checks | No reflection magic |
 | Migrations | Embedded numbered `.sql` files plus a small runner | Forward-only |
-| Keys and tokens | SHA-256 hashes of high-entropy random values | No passwords: sign-in is by magic link |
+| Passwords and keys | argon2id (`x/crypto`) for passwords; SHA-256 for keys and tokens | Keys are high-entropy |
 | Logging and metrics | `log/slog` JSON; Prometheus text format | Standard library first |
 | Tests | `go test` against real Postgres and Redis | Mocks hide the bugs that matter |
 | Dashboard | Next.js (App Router) on Bun | Same stack as the landing page |
@@ -466,13 +469,15 @@ Two layers: the **management API** at `/v1` creates and configures projects and 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/v1/setup` | Whether first-run setup is still open |
-| POST | `/v1/setup` | Create the first admin (`token`, `email`, `name`) with the setup token from the logs; starts a session |
-| POST | `/v1/auth/magic-link` | Send a sign-in link to an email. Same response whether or not the email has an account |
-| POST | `/v1/auth/magic-link/verify` | Exchange the link token for a session; creates the account in open signup mode |
+| POST | `/v1/setup` | Create the first admin (`token`, `email`, `password`, `name`) with the setup token from the logs |
+| POST | `/v1/auth/login` | Email and password; starts a session. Locks for 15 minutes after 10 wrong passwords |
+| POST | `/v1/auth/signup` | Email and password, only when open signup is on |
+| POST | `/v1/auth/password/reset` | Email a reset link. Same response whether or not the email has an account |
+| POST | `/v1/auth/password/reset/confirm` | `token`, `password`; signs out other sessions |
 | GET | `/v1/auth/invites/{token}` | Look up an invite (email and role) |
-| POST | `/v1/auth/invites/accept` | Accept an invite (`token`, `name`); creates the account and starts a session |
+| POST | `/v1/auth/invites/accept` | Accept an invite (`token`, `password`, `name`); creates the account and starts a session |
 | POST | `/v1/auth/logout` | End the session |
-| GET/PATCH | `/v1/me` | Current user; update name |
+| GET/PATCH | `/v1/me` | Current user; update name, or password with the current one |
 | GET/POST | `/v1/api-keys` | List or create account keys (secret returned once) |
 | DELETE | `/v1/api-keys/{id}` | Revoke |
 
@@ -484,6 +489,7 @@ Two layers: the **management API** at `/v1` creates and configures projects and 
 | POST | `/v1/admin/invites` | Invite by email with a role; returns the link |
 | DELETE | `/v1/admin/invites/{id}` | Cancel an invite |
 | PATCH | `/v1/admin/users/{id}` | Change role, disable or enable |
+| POST | `/v1/admin/users/{id}/reset-link` | Create a password reset link to hand to a user |
 | GET/PATCH | `/v1/admin/settings` | Signup mode, auto-pause, resource cap, member plan changes |
 | GET/POST/PATCH | `/v1/admin/plans`, `/v1/admin/plans/{id}` | Manage plans |
 | GET/POST/PATCH | `/v1/admin/hosts`, `/v1/admin/hosts/{id}` | Register, drain or take hosts offline |
@@ -534,11 +540,14 @@ Two layers: the **management API** at `/v1` creates and configures projects and 
 | POST | `/queue/{name}/queues/{q}/receive` | secret | `{ max, visibilityTimeout }` |
 | POST | `/queue/{name}/queues/{q}/ack`, `/nack` | secret | `{ ids }` (nack: optional `delay`) |
 | GET | `/queue/{name}/queues/{q}/stats` | secret | Ready, in flight, dead counts |
-| POST | `/auth/otp` | publishable | `{ email, redirectTo, data }`: email a magic link and a 6-digit code |
+| POST | `/auth/signup` | publishable | `{ email, password, data }` → session |
+| POST | `/auth/token?grant_type=password` | publishable | `{ email, password }` → session |
+| POST | `/auth/recover` | publishable | `{ email, redirectTo }`: email a recovery link and code |
+| POST | `/auth/otp` | publishable | `{ email, redirectTo, data }`: email a sign-in link and a 6-digit code |
 | POST | `/auth/verify` | publishable | `{ token }` or `{ email, code }` → session (creates the user on first sign-in) |
 | POST | `/auth/token?grant_type=refresh_token` | publishable | Refresh → session (the refresh token rotates) |
 | POST | `/auth/logout` | publishable + user | Revoke the refresh token family |
-| GET/PUT | `/auth/user` | publishable + user | Current user; update `data` |
+| GET/PUT | `/auth/user` | publishable + user | Current user; update `data` or `password` |
 | POST | `/auth/admin/generate-link` | secret | `{ email, redirectTo }` → link and code, for apps that send their own email |
 | GET/PATCH | `/auth/admin/settings` | secret | Allow sign-ups, site URL, redirect allowlist, token lifetimes |
 | GET/POST | `/auth/admin/users` | secret | List, create users |
@@ -590,9 +599,8 @@ const msgs = await sb.queue('jobs').queue('emails').receive({ max: 10 })
 
 // In a browser, with the publishable key
 const client = createClient(projectUrl, 'sbp_...')
-await client.auth.signInWithOtp({ email, redirectTo: 'https://myapp.com/auth/callback' })
-// on the callback page, or with the 6-digit code from the email:
-const { session } = await client.auth.verify({ token }) // or { email, code }
+await client.auth.signUp({ email, password })
+const { session } = await client.auth.signInWithPassword({ email, password })
 const { user } = await client.auth.getUser()
 ```
 
@@ -664,12 +672,12 @@ Self-hosting is the product. Development needs only Go, Bun, Postgres and Redis 
 **Security baseline**
 
 - TLS everywhere in production; HTTPS only for the API and dashboard.
-- Credentials encrypted at rest with AES-256-GCM. Account keys, project key hashes, session tokens and one-time tokens are hashed. There are no passwords.
+- Credentials encrypted at rest with AES-256-GCM. Passwords are argon2id. Account keys, project key hashes, session tokens and one-time tokens are SHA-256 hashed.
 - Tenant roles are never superusers and cannot create roles or databases.
 - The project API runs as the service's own credentials.
 - Credential rotation per service with a grace period.
 - Audit log for every create, delete, rotate, plan change, pause, suspend, invite, role change and limit event.
-- Rate limits on magic-link requests (per email and per IP), verification attempts, setup, end-user auth and every key. One-time codes lock after 5 wrong tries.
+- Rate limits on login, signup, resets, setup, end-user auth and every key. Accounts lock for 15 minutes after 10 wrong passwords; one-time codes lock after 5 wrong tries.
 - First-run setup needs a one-time token from the server logs.
 
 **Backups.** Nightly logical dump (`pg_dump`) per Postgres-family service into backup storage, kept by plan, with restore into the same or a new service. The control database is dumped the same way. Weekly automated restore test.

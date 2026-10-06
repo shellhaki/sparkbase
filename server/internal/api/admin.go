@@ -161,6 +161,23 @@ func (s *Server) adminRoutes() {
 		return httpx.OK(w, map[string]any{"user": u})
 	})
 
+	// Without SMTP an admin hands a user this link to reset a password.
+	s.admin("POST /v1/admin/users/{id}/reset-link", func(w http.ResponseWriter, r *http.Request, p *principal) error {
+		u, err := s.Store.GetUser(r.Context(), r.PathValue("id"))
+		if errors.Is(err, store.ErrNotFound) {
+			return httpx.NotFound("user")
+		}
+		if err != nil {
+			return err
+		}
+		link, err := s.CreatePasswordResetLink(r.Context(), u)
+		if err != nil {
+			return err
+		}
+		s.Audit(r.Context(), p.User.ID, "", "user.reset_link", map[string]any{"user": u.ID})
+		return httpx.WriteJSON(w, 201, map[string]any{"link": link, "expiresIn": int(resetTTL.Seconds())})
+	})
+
 	s.admin("GET /v1/admin/settings", func(w http.ResponseWriter, r *http.Request, p *principal) error {
 		st, err := s.Settings(r.Context())
 		if err != nil {

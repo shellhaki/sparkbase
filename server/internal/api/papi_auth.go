@@ -227,6 +227,120 @@ func (s *Server) sendOTP(ctx context.Context, a *authCtx, st *authSettings, emai
 }
 
 func (s *Server) authServiceRoutes() {
+	s.papi("POST /p/{ref}/auth/signup", accessPublishable, func(w http.ResponseWriter, r *http.Request, pc *pctx) error {
+		var in struct {
+			Email    string         `json:"email"`
+			Password string         `json:"password"`
+			Data     map[string]any `json:"data"`
+		}
+		if err := httpx.Decode(r, &in, 64<<10); err != nil {
+			return err
+		}
+		if err := s.ipLimit(w, r, "authsignup:"+pc.Project.ID, 20, 10*time.Minute); err != nil {
+			return err
+		}
+		email, ok := NormalizeEmail(in.Email)
+		if !ok {
+			return httpx.Invalid("enter a valid email address")
+		}
+		if !sbcrypto.ValidPassword(in.Password) {
+			return errWeakPassword
+		}
+		a, err := s.authService(r, pc)
+		if err != nil {
+			return err
+		}
+		ctx := r.Context()
+		st, err := loadAuthSettings(ctx, a.pool)
+		if err != nil {
+			return err
+		}
+		if !st.AllowSignups {
+			return httpx.Forbidden("sign-ups are closed for this app")
+		}
+		tx, err := a.pool.Begin(ctx)
+		if err != nil {
+			return queryError(err)
+		}
+		defer tx.Rollback(context.Background())
+		if max := a.res.Limits.Get("max_users"); max > 0 {
+			var n int64
+			if err := tx.QueryRow(ctx, `select count(*) from sb_users`).Scan(&n); err != nil {
+				return queryError(err)
+			}
+			if n >= max {
+				return httpx.Quota("this app reached its user limit")
+			}
+		}
+		if in.Data == nil {
+			in.Data = map[string]any{}
+		}
+		u, err := scanAuthUser(tx.QueryRow(ctx, `
+			insert into sb_users (email, password_hash, data, last_sign_in_at) values ($1, $2, $3, now())
+			on conflict (email) do nothing returning `+authUserCols, email, sbcrypto.HashPassword(in.Password), in.Data))
+		var e *httpx.Error
+		if errors.As(err, &e) && e.Code == "not_found" {
+			return httpx.Conflict("a user with this email exists; sign in instead")
+		}
+		if err != nil {
+			return err
+		}
+		sess, err := s.issueSession(ctx, a, tx, u, "", st)
+		if err != nil {
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return queryError(err)
+		}
+		return httpx.WriteJSON(w, 201, map[string]any{"session": sess, "user": u})
+	})
+
+	// Password recovery emails a one-time link and code. Verifying it signs
+	// the user in, and the app then sets a new password with PUT /auth/user.
+	s.papi("POST /p/{ref}/auth/recover", accessPublishable, func(w http.ResponseWriter, r *http.Request, pc *pctx) error {
+		var in struct {
+			Email      string `json:"email"`
+			RedirectTo string `json:"redirectTo"`
+		}
+		if err := httpx.Decode(r, &in, 0); err != nil {
+			return err
+		}
+		email, ok := NormalizeEmail(in.Email)
+		if !ok {
+			return httpx.Invalid("enter a valid email address")
+		}
+		if err := s.ipLimit(w, r, "authotp:"+pc.Project.ID, 30, 10*time.Minute); err != nil {
+			return err
+		}
+		a, err := s.authService(r, pc)
+		if err != nil {
+			return err
+		}
+		ctx := r.Context()
+		st, err := loadAuthSettings(ctx, a.pool)
+		if err != nil {
+			return err
+		}
+		if in.RedirectTo == "" {
+			in.RedirectTo = st.SiteURL
+		} else if !st.allowedRedirect(in.RedirectTo) {
+			return httpx.Invalid("redirectTo is not the site URL or in the redirect allowlist; add it in the auth settings")
+		}
+		if res, err := s.Limiter.Allow(ctx, "authotp:email:"+a.res.ID+":"+sbcrypto.SHA256Hex(email), 5, 15*time.Minute); err == nil && !res.Allowed {
+			return httpx.OK(w, map[string]any{"sent": true})
+		}
+		var exists bool
+		if err := a.pool.QueryRow(ctx, `select exists(select 1 from sb_users where email = $1 and banned_at is null)`, email).Scan(&exists); err != nil {
+			return queryError(err)
+		}
+		if exists {
+			if _, _, _, err := s.sendOTP(ctx, a, st, email, in.RedirectTo, nil, true); err != nil {
+				return err
+			}
+		}
+		return httpx.OK(w, map[string]any{"sent": true})
+	})
+
 	s.papi("POST /p/{ref}/auth/otp", accessPublishable, func(w http.ResponseWriter, r *http.Request, pc *pctx) error {
 		var in struct {
 			Email      string         `json:"email"`
@@ -336,8 +450,13 @@ func (s *Server) authServiceRoutes() {
 				return invalid
 			}
 			if subtle.ConstantTimeCompare([]byte(codeHash), []byte(sbcrypto.SHA256Hex(e+":"+strings.TrimSpace(in.Code)))) != 1 {
-				// Count the miss in its own statement so it survives the rollback.
-				_, _ = a.pool.Exec(ctx, `update sb_otps set attempts = attempts + 1 where id = $1`, otpID)
+				// Count the miss and commit it, so repeated guesses lock the code.
+				if _, err := tx.Exec(ctx, `update sb_otps set attempts = attempts + 1 where id = $1`, otpID); err != nil {
+					return queryError(err)
+				}
+				if err := tx.Commit(ctx); err != nil {
+					return queryError(err)
+				}
 				return invalid
 			}
 			if _, err := tx.Exec(ctx, `update sb_otps set used_at = now() where id = $1`, otpID); err != nil {
@@ -397,8 +516,12 @@ func (s *Server) authServiceRoutes() {
 	})
 
 	s.papi("POST /p/{ref}/auth/token", accessPublishable, func(w http.ResponseWriter, r *http.Request, pc *pctx) error {
-		if r.URL.Query().Get("grant_type") != "refresh_token" {
-			return httpx.Invalid("grant_type must be refresh_token; sign in with /auth/otp and /auth/verify")
+		grant := r.URL.Query().Get("grant_type")
+		if grant == "password" {
+			return s.passwordGrant(w, r, pc)
+		}
+		if grant != "refresh_token" {
+			return httpx.Invalid("grant_type must be password or refresh_token")
 		}
 		var in struct {
 			RefreshToken string `json:"refresh_token"`
@@ -437,7 +560,12 @@ func (s *Server) authServiceRoutes() {
 		}
 		if revoked {
 			// A used token came back: assume it was stolen and end the family.
-			_, _ = a.pool.Exec(ctx, `update sb_refresh_tokens set revoked = true where family = $1`, family)
+			if _, err := tx.Exec(ctx, `update sb_refresh_tokens set revoked = true where family = $1`, family); err != nil {
+				return queryError(err)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return queryError(err)
+			}
 			return httpx.Unauthorized("this refresh token was already used; sign in again")
 		}
 		if time.Now().After(expires) {
@@ -502,7 +630,8 @@ func (s *Server) authServiceRoutes() {
 
 	s.papi("PUT /p/{ref}/auth/user", accessPublishable, func(w http.ResponseWriter, r *http.Request, pc *pctx) error {
 		var in struct {
-			Data map[string]any `json:"data"`
+			Data     map[string]any `json:"data"`
+			Password *string        `json:"password"`
 		}
 		if err := httpx.Decode(r, &in, 64<<10); err != nil {
 			return err
@@ -518,8 +647,17 @@ func (s *Server) authServiceRoutes() {
 		if in.Data == nil {
 			in.Data = map[string]any{}
 		}
+		var hash *string
+		if in.Password != nil {
+			if !sbcrypto.ValidPassword(*in.Password) {
+				return errWeakPassword
+			}
+			h := sbcrypto.HashPassword(*in.Password)
+			hash = &h
+		}
 		u, err := scanAuthUser(a.pool.QueryRow(r.Context(), `
-			update sb_users set data = data || $2, updated_at = now() where id = $1 returning `+authUserCols, claims["sub"], in.Data))
+			update sb_users set data = data || $2, password_hash = coalesce($3, password_hash), updated_at = now()
+			where id = $1 returning `+authUserCols, claims["sub"], in.Data, hash))
 		if err != nil {
 			return err
 		}
@@ -558,9 +696,10 @@ func (s *Server) authServiceRoutes() {
 
 	s.papi("POST /p/{ref}/auth/admin/users", accessSecret, func(w http.ResponseWriter, r *http.Request, pc *pctx) error {
 		var in struct {
-			Email   string         `json:"email"`
-			Data    map[string]any `json:"data"`
-			AppData map[string]any `json:"appData"`
+			Email    string         `json:"email"`
+			Password string         `json:"password"`
+			Data     map[string]any `json:"data"`
+			AppData  map[string]any `json:"appData"`
 		}
 		if err := httpx.Decode(r, &in, 64<<10); err != nil {
 			return err
@@ -589,9 +728,17 @@ func (s *Server) authServiceRoutes() {
 		if in.AppData == nil {
 			in.AppData = map[string]any{}
 		}
+		var hash *string
+		if in.Password != "" {
+			if !sbcrypto.ValidPassword(in.Password) {
+				return errWeakPassword
+			}
+			h := sbcrypto.HashPassword(in.Password)
+			hash = &h
+		}
 		u, err := scanAuthUser(a.pool.QueryRow(ctx, `
-			insert into sb_users (email, data, app_data) values ($1, $2, $3)
-			on conflict (email) do nothing returning `+authUserCols, email, in.Data, in.AppData))
+			insert into sb_users (email, data, app_data, password_hash, email_confirmed_at) values ($1, $2, $3, $4, now())
+			on conflict (email) do nothing returning `+authUserCols, email, in.Data, in.AppData, hash))
 		var e *httpx.Error
 		if errors.As(err, &e) && e.Code == "not_found" {
 			return httpx.Conflict("a user with this email exists")
@@ -768,4 +915,69 @@ func (s *Server) authServiceRoutes() {
 		}
 		return httpx.OK(w, map[string]any{"settings": st})
 	})
+}
+
+// passwordGrant signs an end user in with email and password.
+func (s *Server) passwordGrant(w http.ResponseWriter, r *http.Request, pc *pctx) error {
+	var in struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := httpx.Decode(r, &in, 0); err != nil {
+		return err
+	}
+	if err := s.ipLimit(w, r, "authlogin:"+pc.Project.ID, 60, 10*time.Minute); err != nil {
+		return err
+	}
+	a, err := s.authService(r, pc)
+	if err != nil {
+		return err
+	}
+	ctx := r.Context()
+	wrong := httpx.Unauthorized("wrong email or password")
+	email, ok := NormalizeEmail(in.Email)
+	if !ok {
+		sbcrypto.DummyVerify(in.Password)
+		return wrong
+	}
+	if res, err := s.Limiter.Allow(ctx, "authlogin:email:"+a.res.ID+":"+sbcrypto.SHA256Hex(email), 10, 15*time.Minute); err == nil && !res.Allowed {
+		return httpx.E(429, "rate_limited", "too many sign-in attempts for this email; try again later")
+	}
+	st, err := loadAuthSettings(ctx, a.pool)
+	if err != nil {
+		return err
+	}
+	var hash *string
+	var id string
+	err = a.pool.QueryRow(ctx, `select id, password_hash from sb_users where email = $1`, email).Scan(&id, &hash)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && hash == nil) {
+		sbcrypto.DummyVerify(in.Password)
+		return wrong
+	}
+	if err != nil {
+		return queryError(err)
+	}
+	if !sbcrypto.VerifyPassword(in.Password, *hash) {
+		return wrong
+	}
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return queryError(err)
+	}
+	defer tx.Rollback(context.Background())
+	u, err := scanAuthUser(tx.QueryRow(ctx, `update sb_users set last_sign_in_at = now() where id = $1 returning `+authUserCols, id))
+	if err != nil {
+		return err
+	}
+	if u.BannedAt != nil {
+		return httpx.Forbidden("this user is banned")
+	}
+	sess, err := s.issueSession(ctx, a, tx, u, "", st)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return queryError(err)
+	}
+	return httpx.OK(w, map[string]any{"session": sess, "user": u})
 }

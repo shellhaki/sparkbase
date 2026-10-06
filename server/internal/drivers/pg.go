@@ -497,6 +497,7 @@ func setupAuth(ctx context.Context, conn *pgx.Conn, t *Target) error {
 		create table if not exists sb_users (
 		  id                 uuid primary key default gen_random_uuid(),
 		  email              text not null unique,
+		  password_hash      text,
 		  data               jsonb not null default '{}',
 		  app_data           jsonb not null default '{}',
 		  email_confirmed_at timestamptz,
