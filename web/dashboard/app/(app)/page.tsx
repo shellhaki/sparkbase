@@ -17,7 +17,7 @@ interface Project {
   status: string;
   url: string;
   createdAt: string;
-  serviceKinds: string[];
+  serviceKinds?: string[];
 }
 
 export default function ProjectsPage() {
@@ -59,7 +59,9 @@ export default function ProjectsPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data?.projects.map((p, i) => (
+          {data?.projects.map((p, i) => {
+            const kinds = p.serviceKinds ?? [];
+            return (
             <Link key={p.id} href={`/projects/${p.id}`} className="group animate-fade-up" style={{ animationDelay: `${i * 50}ms` }}>
               <Card className="card-hover flex h-full flex-col p-5">
                 <div className="flex items-start justify-between gap-2">
@@ -70,13 +72,13 @@ export default function ProjectsPage() {
                   <ArrowUpRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
                 </div>
                 <div className="mt-6 flex items-end justify-between gap-3">
-                  {p.serviceKinds.length > 0 ? (
+                  {kinds.length > 0 ? (
                     <div className="flex gap-1.5">
-                      {p.serviceKinds.slice(0, 6).map((k, j) => (
+                      {kinds.slice(0, 6).map((k, j) => (
                         <ServiceLogo key={j} kind={k} size="sm" />
                       ))}
-                      {p.serviceKinds.length > 6 && (
-                        <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-xs ring-2 ring-card">+{p.serviceKinds.length - 6}</span>
+                      {kinds.length > 6 && (
+                        <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-xs ring-2 ring-card">+{kinds.length - 6}</span>
                       )}
                     </div>
                   ) : (
@@ -86,7 +88,8 @@ export default function ProjectsPage() {
                 </div>
               </Card>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 
