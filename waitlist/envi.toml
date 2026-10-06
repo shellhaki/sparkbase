@@ -1,0 +1,10 @@
+version = 1
+
+[project]
+id = '98c8f81e-bd9e-44f7-abd2-004791f3fae8'
+name = 'sparkbase'
+
+[environment]
+id = '0591e426-1fe6-4210-9644-b1d824fcf892'
+name = 'waitlist-dev'
+revision = 1

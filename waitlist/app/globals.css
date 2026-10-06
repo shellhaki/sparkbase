@@ -1,0 +1,162 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Sparkbase palette, mapped onto shadcn/ui token names.
+ * Brand blue sampled from public/brand/sparkbase-mark.png and defined once as --brand.
+ * Dark is the default; light comes from prefers-color-scheme.
+ */
+:root {
+  --brand: #2d57fb;
+  --brand-hover: #4a6dfc;
+  --on-brand: #ffffff;
+
+  --background: #0a0a0b;
+  --foreground: #f5f5f2;
+  --card: #141416;
+  --card-foreground: #f5f5f2;
+  --popover: #141416;
+  --popover-foreground: #f5f5f2;
+  --primary: var(--brand);
+  --primary-foreground: var(--on-brand);
+  --secondary: #1c1c20;
+  --secondary-foreground: #f5f5f2;
+  --muted: #1c1c20;
+  --muted-foreground: #9a9aa2;
+  --accent: #232328;
+  --accent-foreground: #f5f5f2;
+  --destructive: #ff7a7a;
+  --border: #1f1f24;
+  --input: #26262c;
+  --ring: var(--brand);
+  --radius: 0.75rem;
+
+  /* The terminal stays dark in both themes. */
+  --term-bg: #0f0f12;
+  --term-border: #1f1f24;
+  --term-fg: #f5f5f2;
+  --term-muted: #9a9aa2;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --brand-hover: #1f47e6;
+    --background: #ffffff;
+    --foreground: #0b0b0d;
+    --card: #f6f6f8;
+    --card-foreground: #0b0b0d;
+    --popover: #ffffff;
+    --popover-foreground: #0b0b0d;
+    --secondary: #ececf0;
+    --secondary-foreground: #0b0b0d;
+    --muted: #ececf0;
+    --muted-foreground: #55555e;
+    --accent: #e6e6eb;
+    --accent-foreground: #0b0b0d;
+    --destructive: #c0262d;
+    --border: #e4e4e9;
+    --input: #dcdce2;
+    color-scheme: light;
+  }
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-on-brand: var(--on-brand);
+  --color-term-bg: var(--term-bg);
+  --color-term-line: var(--term-border);
+  --color-term-fg: var(--term-fg);
+  --color-term-muted: var(--term-muted);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-brand: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply bg-background font-sans;
+    scroll-padding-top: 5rem;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.caret {
+  animation: caret-blink 1.1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret {
+    animation: none;
+  }
+}
