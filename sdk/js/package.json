@@ -1,0 +1,26 @@
+{
+  "name": "@sparkbase/sdk",
+  "version": "0.1.0",
+  "description": "One client for every service in a Sparkbase project: Postgres, cache, storage, vector, queues and auth.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target browser --format esm && tsc -p tsconfig.json --emitDeclarationOnly",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}
