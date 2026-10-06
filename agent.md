@@ -112,7 +112,7 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 
 **3.4 Dashboard.** Usage bars, notifications, admin health page.
 
-## Stage 4: Release (after Stage 3)
+## Stage 4: Release (built)
 
 Docker images, `deploy/docker-compose.yml` with Traefik, PgBouncer, pgvector and Garage, bring-your-own-Traefik profile, end-to-end install test, docs site, license files (AGPL-3.0 core, MIT SDK and CLI), release pipeline.
 

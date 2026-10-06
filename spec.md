@@ -654,9 +654,9 @@ Plans are named limits presets the admin manages. No prices. Three plans per kin
 
 ## Self-hosting
 
-Self-hosting is the product. Development needs only Go, Bun, Postgres and Redis installed locally (`scripts/dev-services.sh` starts private instances). The Docker install comes later in the build.
+Self-hosting is the product. Development needs only Go, Bun, Postgres and Redis installed locally (`scripts/dev-services.sh` starts private instances). Servers use the Docker install below; see `docs/self-hosting.md`.
 
-**Docker install (later stage).** `deploy/docker-compose.yml` with Traefik, the server, the dashboard, control Postgres and Redis, a Postgres data host with PgBouncer and pgvector, a Redis data host and Garage. Only Traefik publishes ports.
+**Docker install.** `deploy/docker-compose.yml` with Traefik, the server, the dashboard, control Postgres and Redis, a Postgres data host with PgBouncer and pgvector, a Redis data host and Garage. Only Traefik publishes ports.
 
 **Bring your own Traefik.** A compose profile without the bundled Traefik, with labels and the HTTP provider endpoint documented.
 

@@ -14,3 +14,8 @@ One line per decision: date, choice, reason.
 - 2026-10-06: `members_change_plans` defaults to true (small trusted installs); admins can turn it off.
 - 2026-10-06: Native hostnames are `<name>-<ref>.db.<domain>` so a project can have several databases.
 - 2026-10-06: No setup token. The first account on a fresh install becomes the admin and sign-up closes; everyone else joins by invite. Open sign-up mode removed. Owner's choice; the server prints a reminder to finish setup right after the first start.
+- 2026-10-06: Docker install pins Garage v2.4.1 (admin API v2), PgBouncer 1.26 (auth_query through a security-definer function that only returns `sbu_*` tenant logins), pgvector/pgvector:pg18, Traefik v3.7. The server image is based on postgres:18-alpine so backups get a matching pg_dump.
+- 2026-10-06: Traefik static config is built by `deploy/traefik/start.sh` from TLS_MODE; HTTPS routes come from a templated file provider, native TCP routes from the API's config endpoint. `/internal` and `/metrics` are not routed publicly.
+- 2026-10-06: TLS_MODE gains `selfsigned` (Traefik's default certificate) for testing; native ports are configurable (NATIVE_PG_PORT etc.) so shifted-port installs print correct connection strings.
+- 2026-10-06: Encryption key rotation is a one-shot command, `sparkbase-server rotate-encryption-key`, re-encrypting all secrets in one transaction.
+- 2026-10-06: Service logos: Postgres and Redis use their simple-icons marks (CC0); storage, vector, queue and auth use drawn marks.

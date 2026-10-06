@@ -1,0 +1,7 @@
+{
+  "name": "sparkbase-node-quickstart",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node --env-file=.env index.mjs" },
+  "dependencies": { "@sparkbase/sdk": "file:../../sdk/js" }
+}
