@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const TITLES: Record<List, string> = { waitlist: "Waitlist", newsletter: "Newsletter" };
+const TITLES: Record<List, string> = { waitlist: "Release list", newsletter: "Newsletter" };
 
 const formatDate = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
 

@@ -1,6 +1,5 @@
-import { ArrowUpRightIcon, BoxesIcon, PlugIcon, ReceiptIcon } from "lucide-react";
+import { ArrowUpRightIcon, BoxesIcon, PlugIcon, ServerIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Pricing } from "@/components/pricing";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,15 +22,15 @@ const cards = [
     body: "Standard connection strings that work with any driver or ORM. The SDK and API are extras, not a wall.",
   },
   {
-    icon: ReceiptIcon,
-    title: "Pay per resource",
-    body: "No bundles and no surprise bills. Every resource has its own Free, Pro and Max plan, with hard caps and a clear upgrade prompt.",
+    icon: ServerIcon,
+    title: "Runs on your server",
+    body: "One docker compose up with Traefik in front. HTTPS, certificates and a hostname per project are handled for you.",
   },
 ];
 
 const steps: { title: string; body: ReactNode }[] = [
-  { title: "Create a project", body: "Free to create. Give it a name and you're set." },
-  { title: "Add resources", body: "Pick a service and a plan: Postgres, a Redis cache, or object storage." },
+  { title: "Create a project", body: "Give it a name and you're set." },
+  { title: "Add resources", body: "Pick a service: Postgres, a Redis cache, or object storage." },
   {
     title: "Connect",
     body: (
@@ -43,7 +42,7 @@ const steps: { title: string; body: ReactNode }[] = [
   },
 ];
 
-const AVAILABLE = "Available at launch";
+const AVAILABLE = "First release";
 const LATER = "Coming later";
 
 const resources = [
@@ -60,12 +59,12 @@ const resources = [
 
 const faqs: { q: string; a: ReactNode }[] = [
   {
-    q: "When can I get access?",
-    a: "We'll start with a small private beta and invite people from the waitlist in batches. You'll get one email when your invite is ready.",
+    q: "When is the first release?",
+    a: "When Postgres, the cache and object storage pass their isolation tests. Join the release list and you'll get one email when it ships.",
   },
   {
-    q: "Is there a free plan?",
-    a: "Yes. Every resource has a Free plan. Free and paid plans have hard caps, so you never get a surprise bill.",
+    q: "Does it cost anything?",
+    a: "No. Sparkbase is free and open source, with no paid tier and no hosted edition. You only pay for the server you run it on.",
   },
   {
     q: "Which databases are supported?",
@@ -76,16 +75,17 @@ const faqs: { q: string; a: ReactNode }[] = [
     a: "Yes. Every resource gives you a standard connection string. The SDK and API are optional.",
   },
   {
-    q: "Can I self-host it?",
+    q: "What do I need to run it?",
     a: (
       <>
-        Yes. Sparkbase is open source, and a single <Code>docker compose up</Code> runs it on your own machine.
+        A Linux server with Docker and a domain. <Code>docker compose up -d</Code> starts everything, and Traefik gets
+        the HTTPS certificates. You can invite other people to create projects on your install.
       </>
     ),
   },
   {
-    q: "What's the difference between the waitlist and the newsletter?",
-    a: "The waitlist is for early access to the product. The newsletter is for build-in-public updates as we ship. You can join both.",
+    q: "What's the difference between the release list and the newsletter?",
+    a: "The release list gets one email when the first release ships. The newsletter gets build-in-public updates along the way. You can join both.",
   },
 ];
 
@@ -128,7 +128,7 @@ export default function Home() {
             <span aria-hidden="true" className="text-muted-foreground">·</span>
             <span className="truncate">Self-hostable</span>
             <span aria-hidden="true" className="hidden text-muted-foreground sm:inline">·</span>
-            <span className="hidden sm:inline">Early access coming soon</span>
+            <span className="hidden sm:inline">First release coming soon</span>
             <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent transition-colors group-hover:bg-brand group-hover:text-on-brand sm:size-8">
               <ArrowUpRightIcon aria-hidden="true" className="size-4" />
             </span>
@@ -140,8 +140,8 @@ export default function Home() {
             The data layer for your backend.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground md:text-xl">
-            Create a project. Attach only the services you need. Connect with a normal connection string, an SDK, or an
-            API. Pay for exactly what you attach.
+            Run it on your own server. Create a project, attach only the services you need, and connect with a normal
+            connection string, an SDK, or an API.
           </p>
           <div className="mt-10">
             <SignupForm id="join" />
@@ -205,7 +205,7 @@ export default function Home() {
         <div className="max-w-2xl">
           <H2 id="resources-title">Resources</H2>
           <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
-            Each resource is its own service, with its own plan.
+            Each resource is its own service, with its own credentials and limits.
           </p>
         </div>
         <div className="mt-14 overflow-hidden rounded-3xl border">
@@ -257,24 +257,14 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Pricing */}
-      <Section id="pricing" labelledBy="pricing-title">
-        <div className="mx-auto max-w-2xl text-center">
-          <H2 id="pricing-title">Pricing</H2>
-        </div>
-        <div className="mt-10">
-          <Pricing />
-        </div>
-      </Section>
-
       {/* 5. Open source */}
       <Section id="open-source" labelledBy="oss-title">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
-            <H2 id="oss-title">Open source and self-hostable.</H2>
+            <H2 id="oss-title">Open source, all of it.</H2>
             <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
-              The same code runs our cloud and your laptop. Self-host the whole thing with no feature gating, or let us
-              run it for you: managed hosts, backups, upgrades and support.
+              No paid tier, no cloud edition and no feature gating. Run the whole thing on your own server with Docker
+              Compose, with Traefik in front for HTTPS.
             </p>
             <Button asChild size="pill" className="mt-8">
               <a href={GITHUB_URL} rel="noopener">
@@ -285,7 +275,7 @@ export default function Home() {
           </div>
           <pre className="overflow-x-auto rounded-3xl border border-term-line bg-term-bg px-6 py-8 font-mono text-sm text-term-fg">
             <code>
-              <span className="text-term-muted select-none">$ </span>docker compose up
+              <span className="text-term-muted select-none">$ </span>docker compose up -d
             </code>
           </pre>
         </div>
@@ -314,9 +304,9 @@ export default function Home() {
       {/* 7. Final CTA */}
       <Section labelledBy="cta-title">
         <div className="mx-auto max-w-2xl text-center">
-          <H2 id="cta-title">Get early access.</H2>
+          <H2 id="cta-title">Get notified at first release.</H2>
           <p className="mt-5 text-lg leading-relaxed text-pretty text-muted-foreground">
-            Join the waitlist and we&apos;ll email you once when it opens. Prefer to follow along? Switch to the
+            Join the release list and we&apos;ll email you once when it ships. Prefer to follow along? Switch to the
             newsletter.
           </p>
           <div className="mt-10">

@@ -1,6 +1,6 @@
 # Sparkbase landing page
 
-The Sparkbase landing page, waitlist and newsletter signup. It is one Next.js app (App Router, TypeScript): the pages, the API route and the database access all live here.
+The Sparkbase landing page, release list and newsletter signup. It is one Next.js app (App Router, TypeScript): the pages, the API route and the database access all live here.
 
 - `/`: landing page with the signup form
 - `/privacy`: privacy notice
@@ -38,7 +38,6 @@ bun run dev                 # http://localhost:3000
 | `NEXT_PUBLIC_SITE_URL` | yes | Public URL with no trailing slash, e.g. `https://sparkbase.io`. Used for metadata, the sitemap and robots.txt. |
 | `NEXT_PUBLIC_GITHUB_URL` | no | Defaults to `https://github.com/shellhaki`. |
 | `NEXT_PUBLIC_X_URL` | no | Defaults to `https://x.com/haki_xer`. |
-| `NEXT_PUBLIC_USD_TO_NGN` | no | Exchange rate for the pricing USD/NGN switch. Defaults to `1500`. Naira prices are rounded to the nearest ₦100. |
 | `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` | no | When set, loads Plausible and sends one `signup` event with a `list` property. It also shows the Analytics section on `/privacy`. |
 
 `NEXT_PUBLIC_*` values and `CONTACT_EMAIL` are read at build time, because the landing page and `/privacy` are prerendered. Rebuild after you change them.

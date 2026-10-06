@@ -16,11 +16,11 @@ declare global {
 
 const COPY: Record<List, { label: string; button: string; loading: string; helper: string; success: string; switchTo: string }> = {
   waitlist: {
-    label: "Join the waitlist",
-    button: "Join the waitlist",
+    label: "Release list",
+    button: "Notify me",
     loading: "Joining...",
-    helper: "One email when early access opens. No spam.",
-    success: "You're on the list. We'll email you when early access opens.",
+    helper: "One email when the first release ships. No spam.",
+    success: "You're on the list. We'll email you when the first release ships.",
     switchTo: "Also want the newsletter?",
   },
   newsletter: {
@@ -29,7 +29,7 @@ const COPY: Record<List, { label: string; button: string; loading: string; helpe
     loading: "Subscribing...",
     helper: "Build-in-public updates as we ship. Unsubscribe any time.",
     success: "You're subscribed. Thanks for following along.",
-    switchTo: "Also join the waitlist?",
+    switchTo: "Also join the release list?",
   },
 };
 
@@ -77,7 +77,7 @@ export function SignupForm({ id, align = "center" }: { id?: string; align?: "cen
   const emailRef = useRef<HTMLInputElement>(null);
   const focusEmailOnOpen = useRef(false);
 
-  // The nav button links to "#join". When it targets this form, select the waitlist and focus the field.
+  // The nav button links to "#join". When it targets this form, select the release list and focus the field.
   useEffect(() => {
     if (!id) return;
     function onClick(event: MouseEvent) {

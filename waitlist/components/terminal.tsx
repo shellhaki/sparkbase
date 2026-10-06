@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 type Line = { kind: "command" | "output"; text: string };
 
 const LINES: Line[] = [
-  { kind: "command", text: "sparkbase resources add postgres --plan free" },
+  { kind: "command", text: "sparkbase resources add postgres" },
   { kind: "command", text: "sparkbase env pull" },
-  { kind: "output", text: "DATABASE_URL=postgres://sb_x1y2:••••@a1b2c3.db.sparkbase.io:6432/main" },
+  { kind: "output", text: "DATABASE_URL=postgres://sb_x1y2:••••@a1b2c3.db.example.com:6432/main" },
 ];
 
 const TYPE_MS = 32;

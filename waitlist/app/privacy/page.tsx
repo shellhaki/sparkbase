@@ -32,17 +32,17 @@ export default function PrivacyPage() {
     <PageShell>
       <h1 className="text-5xl font-semibold tracking-[-0.04em]">Privacy</h1>
       <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
-        This page explains what we collect when you join the Sparkbase waitlist or newsletter.
+        This page explains what we collect when you join the Sparkbase release list or newsletter.
       </p>
 
       <div className="mt-14 space-y-10">
         <Block title="What we collect">
-          Your email address, which list you joined (waitlist or newsletter), and where you came from if your link
+          Your email address, which list you joined (release list or newsletter), and where you came from if your link
           included a source. To limit abuse we also store a hashed version of your IP address, never the address
           itself.
         </Block>
         <Block title="How we use it">
-          We use your email only to contact you about Sparkbase: early access for the waitlist, and updates for the
+          We use your email only to contact you about Sparkbase: one email for the release list when the first release ships, and updates for the
           newsletter.
         </Block>
         <Block title="Sharing">We don&apos;t sell your email address.</Block>

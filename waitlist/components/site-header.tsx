@@ -6,7 +6,6 @@ import { LogoMark, Wordmark } from "./brand";
 const links = [
   { href: "/#how-it-works", label: "How it works" },
   { href: "/#resources", label: "Resources" },
-  { href: "/#pricing", label: "Pricing" },
   { href: "/#open-source", label: "Open source" },
 ];
 
@@ -37,9 +36,9 @@ export function SiteHeader() {
           </li>
         </ul>
 
-        {/* The hero form listens for clicks on "#join" links and selects the waitlist. */}
+        {/* The hero form listens for clicks on "#join" links and selects the release list. */}
         <Button asChild size="pill-sm" className="ml-auto">
-          <Link href="/#join">Join the waitlist</Link>
+          <Link href="/#join">Get notified</Link>
         </Button>
       </nav>
     </header>

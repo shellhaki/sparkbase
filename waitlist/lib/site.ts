@@ -5,7 +5,7 @@ export const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN || "";
 
 export const SITE_TITLE = "Sparkbase: The data layer for your backend";
 export const SITE_DESCRIPTION =
-  "Attach only the data services your backend needs. Postgres, Redis and object storage with native connection strings, an SDK and an API. Open source and self-hostable.";
+  "Self-hosted data services for your backend. Postgres, Redis and object storage with native connection strings, an SDK and an API. Free and open source.";
 
 /** Server-only. Fails loudly in production instead of rendering a wrong address. */
 export function contactEmail(): string {
