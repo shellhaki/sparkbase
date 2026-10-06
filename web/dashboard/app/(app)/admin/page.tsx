@@ -532,7 +532,6 @@ function Hosts() {
 }
 
 interface Settings {
-  signupMode: string;
   autoPauseDays: number;
   resourceCap: number;
   membersChangePlans: boolean;
@@ -566,12 +565,6 @@ function InstallSettings() {
           }
         }}
       >
-        <Field label="Who can sign up">
-          <Select value={form.signupMode} onChange={(e) => setForm({ ...form, signupMode: e.target.value })}>
-            <option value="invite">Invite only</option>
-            <option value="open">Anyone with the dashboard URL</option>
-          </Select>
-        </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Services per member" hint="-1 for unlimited. Admins have no cap.">
             <Input type="number" min={-1} value={form.resourceCap} onChange={(e) => setForm({ ...form, resourceCap: Number(e.target.value) })} />

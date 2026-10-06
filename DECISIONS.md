@@ -13,3 +13,4 @@ One line per decision: date, choice, reason.
 - 2026-10-06: Storage has two backends: `local` (directory per service, API-served, HMAC signed URLs) for development and simple installs, and `garage` for native S3.
 - 2026-10-06: `members_change_plans` defaults to true (small trusted installs); admins can turn it off.
 - 2026-10-06: Native hostnames are `<name>-<ref>.db.<domain>` so a project can have several databases.
+- 2026-10-06: No setup token. The first account on a fresh install becomes the admin and sign-up closes; everyone else joins by invite. Open sign-up mode removed. Owner's choice; the server prints a reminder to finish setup right after the first start.

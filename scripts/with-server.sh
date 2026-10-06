@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts a throwaway Sparkbase server on a fresh control database, runs a
-# command with SB_API and SB_SETUP_TOKEN set, then stops and cleans up.
+# command with SB_API set, then stops and cleans up.
 #
 #   scripts/with-server.sh bun test        (from sdk/js)
 set -euo pipefail
@@ -32,12 +32,11 @@ cleanup() {
 }
 trap cleanup EXIT
 for _ in $(seq 1 100); do
-  grep -q "setup token:" "$WORK/server.log" 2>/dev/null && break
+  curl -sf "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && break
   if ! kill -0 "$PID" 2>/dev/null; then cat "$WORK/server.log"; exit 1; fi
   sleep 0.1
 done
-TOKEN="$(grep "setup token:" "$WORK/server.log" | awk '{print $3}')"
-export SB_API="http://127.0.0.1:$PORT" SB_SETUP_TOKEN="$TOKEN"
+export SB_API="http://127.0.0.1:$PORT"
 set +e
 "$@"
 STATUS=$?

@@ -48,12 +48,12 @@ func run() error {
 	var wg sync.WaitGroup
 	if cfg.Mode == "all" || cfg.Mode == "api" {
 		srv := api.New(a)
-		if tok, err := srv.IssueSetupToken(ctx); err != nil {
+		if n, err := a.Store.CountUsers(ctx); err != nil {
 			return err
-		} else if tok != "" {
-			// The one log line allowed to hold a secret: without it nobody can
-			// claim the fresh install.
-			fmt.Fprintf(os.Stdout, "\n  Sparkbase first-run setup\n  setup token: %s\n  open %s/setup and paste it\n\n", tok, cfg.DashboardURL)
+		} else if n == 0 {
+			// Until the first account exists, whoever signs up first becomes
+			// the admin, so finish setup right after starting.
+			fmt.Fprintf(os.Stdout, "\n  Sparkbase has no admin yet.\n  Open %s/setup now to create the admin account.\n\n", cfg.DashboardURL)
 		}
 		hs := &http.Server{
 			Addr: ":" + strconv.Itoa(cfg.Port), Handler: srv.Handler(),

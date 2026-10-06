@@ -10,8 +10,7 @@ import {
 } from '../src/index'
 
 const API = process.env.SB_API
-const SETUP = process.env.SB_SETUP_TOKEN
-const live = !!API && !!SETUP
+const live = !!API
 
 let cookie = ''
 async function mgmt(method: string, path: string, body?: unknown): Promise<any> {
@@ -33,7 +32,7 @@ let pub: SparkbaseClient
 
 describe.skipIf(!live)('sdk against a live server', () => {
   beforeAll(async () => {
-    await mgmt('POST', '/v1/setup', { token: SETUP, email: 'sdk@example.com', password: 'sdk password 123' })
+    await mgmt('POST', '/v1/setup', { email: 'sdk@example.com', password: 'sdk password 123' })
     project = (await mgmt('POST', '/v1/projects', { name: 'sdk' })).project
     const keys = await mgmt('GET', `/v1/projects/${project.id}/keys`)
     const ids: string[] = []

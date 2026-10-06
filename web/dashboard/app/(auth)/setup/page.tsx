@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 
 export default function SetupPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ token: "", name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -23,12 +23,7 @@ export default function SetupPage() {
   return (
     <AuthCard
       title="Set up Sparkbase"
-      description={
-        <>
-          Create the admin account. The setup token is printed in the server logs, e.g.{" "}
-          <code className="font-mono text-xs">docker compose logs api | grep "setup token"</code>
-        </>
-      }
+      description="The first account on this install is the admin. Everyone else joins by invite."
     >
       <form
         className="space-y-4"
@@ -46,11 +41,8 @@ export default function SetupPage() {
           }
         }}
       >
-        <Field label="Setup token">
-          <Input required value={form.token} onChange={set("token")} className="font-mono" autoFocus />
-        </Field>
         <Field label="Your name">
-          <Input autoComplete="name" value={form.name} onChange={set("name")} />
+          <Input autoComplete="name" value={form.name} onChange={set("name")} autoFocus />
         </Field>
         <Field label="Email">
           <Input type="email" autoComplete="email" required value={form.email} onChange={set("email")} />

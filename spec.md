@@ -46,7 +46,7 @@ The product is a few nouns: an **operator** runs an install, **users** own **pro
 
 **How people sign in.** Email and password. Self-hosted installs often have no SMTP server, so nothing depends on email: invite links are shown to the admin who creates them, and an admin can create a password reset link for any user. When SMTP is configured, invites and reset links are also emailed.
 
-**Who can sign up.** Signup is invite-only by default. An admin invites people by email (or copies the invite link when no SMTP server is configured). An admin can switch the install to open signup. The first admin is created during first-run setup.
+**Who can sign up.** Only once: the first account created on a fresh install becomes the admin, and sign-up closes. Everyone else joins through an invite link from an admin and then signs in. Finish setup right after starting a new install, because until then the first visitor would become the admin.
 
 **Service catalog**
 
@@ -65,7 +65,7 @@ A project can have many services of each kind, except `auth`: a project has at m
 
 **The core user flow**
 
-1. The operator runs the install, completes first-run setup and invites people.
+1. The operator runs the install, creates the first account (the admin) and invites people.
 2. A user signs in and creates a project. The project gets a URL and two API keys.
 3. They add services: pick a kind, a name and a plan.
 4. They wait a few seconds while each one provisions.
@@ -469,9 +469,8 @@ Two layers: the **management API** at `/v1` creates and configures projects and 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/v1/setup` | Whether first-run setup is still open |
-| POST | `/v1/setup` | Create the first admin (`token`, `email`, `password`, `name`) with the setup token from the logs |
+| POST | `/v1/setup` | Create the first account (`email`, `password`, `name`), which becomes the admin. Refused with `setup_closed` once any account exists |
 | POST | `/v1/auth/login` | Email and password; starts a session. Locks for 15 minutes after 10 wrong passwords |
-| POST | `/v1/auth/signup` | Email and password, only when open signup is on |
 | POST | `/v1/auth/password/reset` | Email a reset link. Same response whether or not the email has an account |
 | POST | `/v1/auth/password/reset/confirm` | `token`, `password`; signs out other sessions |
 | GET | `/v1/auth/invites/{token}` | Look up an invite (email and role) |
@@ -490,7 +489,7 @@ Two layers: the **management API** at `/v1` creates and configures projects and 
 | DELETE | `/v1/admin/invites/{id}` | Cancel an invite |
 | PATCH | `/v1/admin/users/{id}` | Change role, disable or enable |
 | POST | `/v1/admin/users/{id}/reset-link` | Create a password reset link to hand to a user |
-| GET/PATCH | `/v1/admin/settings` | Signup mode, auto-pause, resource cap, member plan changes |
+| GET/PATCH | `/v1/admin/settings` | Auto-pause, resource cap, member plan changes, rotation grace period |
 | GET/POST/PATCH | `/v1/admin/plans`, `/v1/admin/plans/{id}` | Manage plans |
 | GET/POST/PATCH | `/v1/admin/hosts`, `/v1/admin/hosts/{id}` | Register, drain or take hosts offline |
 | POST | `/v1/admin/resources/{id}/suspend`, `/unsuspend` | Suspend or lift |
@@ -678,7 +677,7 @@ Self-hosting is the product. Development needs only Go, Bun, Postgres and Redis 
 - Credential rotation per service with a grace period.
 - Audit log for every create, delete, rotate, plan change, pause, suspend, invite, role change and limit event.
 - Rate limits on login, signup, resets, setup, end-user auth and every key. Accounts lock for 15 minutes after 10 wrong passwords; one-time codes lock after 5 wrong tries.
-- First-run setup needs a one-time token from the server logs.
+- Setup is open only until the first account exists; the server prints a reminder to finish it right after the first start.
 
 **Backups.** Nightly logical dump (`pg_dump`) per Postgres-family service into backup storage, kept by plan, with restore into the same or a new service. The control database is dumped the same way. Weekly automated restore test.
 

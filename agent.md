@@ -56,9 +56,9 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 
 **0.4 Crypto.** AES-GCM, argon2id, tokens, account keys `sb_`, project keys `sbp_`/`sbs_`. *Done when:* round trips, tamper and wrong-key tests pass.
 
-**0.5 First-run setup.** Setup token printed once, `GET/POST /v1/setup`. *Done when:* setup works once, wrong token refused, `setup_closed` after.
+**0.5 First-run setup.** The first account becomes the admin; `GET/POST /v1/setup`, closed once any account exists. *Done when:* the first sign-up is admin and a second is refused with `setup_closed`.
 
-**0.6 Accounts, sessions, invites.** Email and password: setup, login with lockout, invites with password, open signup mode, password reset by email and by admin-made link, password change, logout, `/v1/me`, admin users and settings, logging mailer. *Done when:* integration tests cover setup to admin to invite to member sign-in, lockout, resets being single use, a disabled user refused, and identical responses for known and unknown emails.
+**0.6 Accounts, sessions, invites.** Email and password: setup, login with lockout, invites with password, password reset by email and by admin-made link, password change, logout, `/v1/me`, admin users and settings, logging mailer. *Done when:* integration tests cover setup to admin to invite to member sign-in, lockout, resets being single use, a disabled user refused, and identical responses for known and unknown emails.
 
 **0.7 Account keys, middleware, rate limits.** *Done when:* valid, revoked, expired and wrong-project keys and 429 with headers are tested.
 

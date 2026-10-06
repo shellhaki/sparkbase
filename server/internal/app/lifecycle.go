@@ -23,7 +23,6 @@ func ValidName(name string) bool { return nameRe.MatchString(name) }
 
 // Settings is the typed view of install settings.
 type Settings struct {
-	SignupMode         string `json:"signupMode"`
 	AutoPauseDays      int    `json:"autoPauseDays"`
 	ResourceCap        int    `json:"resourceCap"`
 	MembersChangePlans bool   `json:"membersChangePlans"`
@@ -35,13 +34,12 @@ func (a *App) Settings(ctx context.Context) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	s := Settings{SignupMode: "invite", ResourceCap: 10, MembersChangePlans: true, RotationGraceSecs: 3600}
+	s := Settings{ResourceCap: 10, MembersChangePlans: true, RotationGraceSecs: 3600}
 	get := func(k string, v any) {
 		if b, ok := raw[k]; ok {
 			_ = json.Unmarshal(b, v)
 		}
 	}
-	get("signup_mode", &s.SignupMode)
 	get("auto_pause_days", &s.AutoPauseDays)
 	get("resource_cap", &s.ResourceCap)
 	get("members_change_plans", &s.MembersChangePlans)

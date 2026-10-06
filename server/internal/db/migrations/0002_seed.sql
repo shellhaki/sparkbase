@@ -26,7 +26,6 @@ insert into plans (id, kind, name, limits, is_default, sort) values
 on conflict (id) do nothing;
 
 insert into settings (key, value) values
-  ('signup_mode', '"invite"'),
   ('auto_pause_days', '0'),
   ('resource_cap', '10'),
   ('members_change_plans', 'true')

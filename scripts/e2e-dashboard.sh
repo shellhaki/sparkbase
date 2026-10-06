@@ -13,12 +13,12 @@ for _ in $(seq 1 100); do curl -sf "http://127.0.0.1:$PORT/login" >/dev/null && 
 D="http://127.0.0.1:$PORT"
 JAR="$(mktemp)"
 fail() { echo "FAIL: $*"; exit 1; }
-for page in /login /setup /signup /reset-password /invite / /account /admin; do
+for page in /login /setup /reset-password /invite / /account /admin; do
   code=$(curl -s -o /dev/null -w '%{http_code}' "$D$page")
   [ "$code" = 200 ] || fail "page $page returned $code"
 done
 curl -sf "$D/api/v1/setup" | grep -q '"open":true' || fail "setup not open through proxy"
-curl -sf -c "$JAR" -H 'Content-Type: application/json' -d "{\"token\":\"$SB_SETUP_TOKEN\",\"email\":\"e2e@example.com\",\"password\":\"e2e password 1\"}" "$D/api/v1/setup" >/dev/null || fail "setup"
+curl -sf -c "$JAR" -H 'Content-Type: application/json' -d "{\"email\":\"e2e@example.com\",\"password\":\"e2e password 1\"}" "$D/api/v1/setup" >/dev/null || fail "setup"
 curl -sf -b "$JAR" "$D/api/v1/me" | grep -q e2e@example.com || fail "session cookie not carried"
 PID_JSON=$(curl -sf -b "$JAR" -H 'Content-Type: application/json' -d '{"name":"e2e"}' "$D/api/v1/projects")
 PROJECT=$(echo "$PID_JSON" | sed -E 's/.*"id":"([^"]+)".*/\1/')

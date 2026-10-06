@@ -188,7 +188,6 @@ func (s *Server) adminRoutes() {
 
 	s.admin("PATCH /v1/admin/settings", func(w http.ResponseWriter, r *http.Request, p *principal) error {
 		var in struct {
-			SignupMode         *string `json:"signupMode"`
 			AutoPauseDays      *int    `json:"autoPauseDays"`
 			ResourceCap        *int    `json:"resourceCap"`
 			MembersChangePlans *bool   `json:"membersChangePlans"`
@@ -199,12 +198,6 @@ func (s *Server) adminRoutes() {
 		}
 		ctx := r.Context()
 		set := map[string]any{}
-		if in.SignupMode != nil {
-			if *in.SignupMode != "invite" && *in.SignupMode != "open" {
-				return httpx.Invalid("signupMode must be invite or open")
-			}
-			set["signup_mode"] = *in.SignupMode
-		}
 		if in.AutoPauseDays != nil {
 			if *in.AutoPauseDays < 0 || *in.AutoPauseDays > 365 {
 				return httpx.Invalid("autoPauseDays must be 0 (off) to 365")

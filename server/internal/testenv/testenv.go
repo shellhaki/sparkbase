@@ -270,15 +270,11 @@ func (e *Env) Login(email, password string) (*Client, *Resp) {
 	return c, c.Do("POST", "/v1/auth/login", map[string]any{"email": email, "password": password})
 }
 
-// Admin completes first-run setup and returns a signed-in admin client.
+// Admin creates the first account (the admin) and returns its signed-in client.
 func (e *Env) Admin() *Client {
 	e.T.Helper()
-	tok, err := e.API.IssueSetupToken(context.Background())
-	if err != nil || tok == "" {
-		e.T.Fatalf("setup token: %v", err)
-	}
 	c := e.Client()
-	c.Do("POST", "/v1/setup", map[string]any{"token": tok, "email": "admin@example.com", "password": Password, "name": "Admin"}).Must(e.T, 201)
+	c.Do("POST", "/v1/setup", map[string]any{"email": "admin@example.com", "password": Password, "name": "Admin"}).Must(e.T, 201)
 	return c
 }
 

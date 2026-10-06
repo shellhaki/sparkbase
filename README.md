@@ -38,7 +38,7 @@ make frontend   # dashboard
 
 `make stop` stops the private Postgres and Redis.
 
-First run: the backend prints a setup token. Open http://localhost:3000/setup, paste it and create the admin account.
+First run: open http://localhost:3000/setup and create your account. The first account is the admin; everyone else joins by invite.
 
 ## Repository
 

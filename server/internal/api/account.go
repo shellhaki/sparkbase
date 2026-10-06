@@ -35,21 +35,6 @@ func NormalizeEmail(s string) (string, bool) {
 
 var errWeakPassword = httpx.Invalid("password must be 8 to 256 characters")
 
-// IssueSetupToken creates a fresh one-time setup token while the install has
-// no users. It returns "" once setup is closed.
-func (s *Server) IssueSetupToken(ctx context.Context) (string, error) {
-	n, err := s.Store.CountUsers(ctx)
-	if err != nil || n > 0 {
-		return "", err
-	}
-	if err := s.Store.DeleteAuthTokens(ctx, "setup"); err != nil {
-		return "", err
-	}
-	tok := sbcrypto.Token()
-	_, err = s.Store.CreateAuthToken(ctx, store.NewAuthToken{Kind: "setup", TokenHash: sbcrypto.SHA256Hex(tok), ExpiresAt: time.Now().Add(7 * 24 * time.Hour)})
-	return tok, err
-}
-
 func trimName(name *string) *string {
 	if name == nil {
 		return nil
@@ -82,11 +67,7 @@ func (s *Server) accountRoutes() {
 		if err != nil {
 			return err
 		}
-		st, err := s.Settings(r.Context())
-		if err != nil {
-			return err
-		}
-		return httpx.OK(w, map[string]any{"open": n == 0, "signupMode": st.SignupMode, "smtpConfigured": s.Mail.Configured()})
+		return httpx.OK(w, map[string]any{"open": n == 0, "smtpConfigured": s.Mail.Configured()})
 	})
 
 	s.handle("POST /v1/setup", func(w http.ResponseWriter, r *http.Request) error {
@@ -94,7 +75,6 @@ func (s *Server) accountRoutes() {
 			return err
 		}
 		var in struct {
-			Token    string  `json:"token"`
 			Email    string  `json:"email"`
 			Password string  `json:"password"`
 			Name     *string `json:"name"`
@@ -120,14 +100,10 @@ func (s *Server) accountRoutes() {
 			if err != nil {
 				return err
 			}
+			// The first account is the admin. After it exists, people join by
+			// invite and sign in; there is no open sign-up.
 			if n > 0 {
-				return httpx.E(409, "setup_closed", "setup was already completed; sign in instead")
-			}
-			if _, err := tx.ConsumeAuthToken(ctx, "setup", sbcrypto.SHA256Hex(strings.TrimSpace(in.Token))); err != nil {
-				if errors.Is(err, store.ErrNotFound) {
-					return httpx.Unauthorized("the setup token is wrong; find it in the server logs")
-				}
-				return err
+				return httpx.E(409, "setup_closed", "this install already has an admin; sign in, or ask the admin for an invite")
 			}
 			u, err = tx.CreateUser(ctx, email, hash, trimName(in.Name), "admin")
 			return err
@@ -183,47 +159,6 @@ func (s *Server) accountRoutes() {
 			return err
 		}
 		return httpx.OK(w, map[string]any{"user": u})
-	})
-
-	s.handle("POST /v1/auth/signup", func(w http.ResponseWriter, r *http.Request) error {
-		if err := s.ipLimit(w, r, "signup", 10, 10*time.Minute); err != nil {
-			return err
-		}
-		var in struct {
-			Email    string  `json:"email"`
-			Password string  `json:"password"`
-			Name     *string `json:"name"`
-		}
-		if err := httpx.Decode(r, &in, 0); err != nil {
-			return err
-		}
-		ctx := r.Context()
-		st, err := s.Settings(ctx)
-		if err != nil {
-			return err
-		}
-		if st.SignupMode != "open" {
-			return httpx.Forbidden("sign-ups are invite only on this install; ask an admin for an invite")
-		}
-		email, ok := NormalizeEmail(in.Email)
-		if !ok {
-			return httpx.Invalid("enter a valid email address")
-		}
-		if !sbcrypto.ValidPassword(in.Password) {
-			return errWeakPassword
-		}
-		u, err := s.Store.CreateUser(ctx, email, sbcrypto.HashPassword(in.Password), trimName(in.Name), "member")
-		if errors.Is(err, store.ErrConflict) {
-			return httpx.Conflict("an account with this email exists; sign in instead")
-		}
-		if err != nil {
-			return err
-		}
-		s.Audit(ctx, u.ID, "", "user.signup", nil)
-		if err := s.startSession(ctx, w, u); err != nil {
-			return err
-		}
-		return httpx.WriteJSON(w, 201, map[string]any{"user": u})
 	})
 
 	s.handle("POST /v1/auth/password/reset", func(w http.ResponseWriter, r *http.Request) error {

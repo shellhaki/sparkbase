@@ -22,10 +22,10 @@ create table sessions (
 );
 create index sessions_user_idx on sessions (user_id);
 
--- One-time tokens: first-run setup, password resets and invites.
+-- One-time tokens: password resets and invites.
 create table auth_tokens (
   id         uuid primary key default gen_random_uuid(),
-  kind       text not null check (kind in ('setup','password_reset','invite')),
+  kind       text not null check (kind in ('password_reset','invite')),
   user_id    uuid references users(id) on delete cascade,
   email      text,
   token_hash text not null unique,

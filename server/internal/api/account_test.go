@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -18,33 +17,31 @@ func linkToken(link string) string {
 	return link[i+6:]
 }
 
-func TestSetupOnce(t *testing.T) {
+func TestFirstSignupIsAdminThenClosed(t *testing.T) {
 	e := testenv.New(t)
 	c := e.Client()
 	if !c.Do("GET", "/v1/setup", nil).Must(t, 200).Get("open").(bool) {
 		t.Fatal("setup should be open")
 	}
-	tok, err := e.API.IssueSetupToken(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r := c.Do("POST", "/v1/setup", map[string]any{"token": "wrong", "email": "a@example.com", "password": pw}); r.Status != 401 {
-		t.Fatalf("wrong token: %s", r)
-	}
-	if r := c.Do("POST", "/v1/setup", map[string]any{"token": tok, "email": "a@example.com", "password": "short"}); r.Status != 422 {
+	if r := c.Do("POST", "/v1/setup", map[string]any{"email": "a@example.com", "password": "short"}); r.Status != 422 {
 		t.Fatalf("weak password: %s", r)
 	}
-	c.Do("POST", "/v1/setup", map[string]any{"token": tok, "email": "a@example.com", "password": pw}).Must(t, 201)
+	c.Do("POST", "/v1/setup", map[string]any{"email": "a@example.com", "password": pw}).Must(t, 201)
 	if c.Do("GET", "/v1/me", nil).Must(t, 200).Str("user", "role") != "admin" {
 		t.Fatal("first user must be admin")
 	}
-	r := e.Client().Do("POST", "/v1/setup", map[string]any{"token": tok, "email": "b@example.com", "password": pw})
+	if e.Client().Do("GET", "/v1/setup", nil).Must(t, 200).Get("open").(bool) {
+		t.Fatal("setup still open after the first account")
+	}
+	r := e.Client().Do("POST", "/v1/setup", map[string]any{"email": "b@example.com", "password": pw})
 	if r.Status != 409 || r.Code() != "setup_closed" {
-		t.Fatalf("second setup: %s", r)
+		t.Fatalf("second signup: %s", r)
 	}
-	if tok2, _ := e.API.IssueSetupToken(context.Background()); tok2 != "" {
-		t.Fatal("setup token issued after setup")
+	if r := e.Client().Do("POST", "/v1/auth/signup", map[string]any{"email": "b@example.com", "password": pw}); r.Status != 404 {
+		t.Fatalf("open signup route still exists: %s", r)
 	}
+	_, login := e.Login("a@example.com", pw)
+	login.Must(t, 200)
 }
 
 func TestLoginLogoutAndLockout(t *testing.T) {
@@ -130,24 +127,6 @@ func TestPasswordResetAndChange(t *testing.T) {
 	r.Must(t, 200)
 }
 
-func TestOpenSignup(t *testing.T) {
-	e := testenv.New(t)
-	admin := e.Admin()
-	if r := e.Client().Do("POST", "/v1/auth/signup", map[string]any{"email": "new@example.com", "password": pw}); r.Status != 403 {
-		t.Fatalf("signup in invite mode: %s", r)
-	}
-	admin.Do("PATCH", "/v1/admin/settings", map[string]any{"signupMode": "open"}).Must(t, 200)
-	c := e.Client()
-	r := c.Do("POST", "/v1/auth/signup", map[string]any{"email": "new@example.com", "password": pw}).Must(t, 201)
-	if r.Str("user", "role") != "member" {
-		t.Fatalf("open sign-up role: %s", r)
-	}
-	c.Do("GET", "/v1/me", nil).Must(t, 200)
-	if r := e.Client().Do("POST", "/v1/auth/signup", map[string]any{"email": "new@example.com", "password": pw}); r.Status != 409 {
-		t.Fatalf("duplicate signup: %s", r)
-	}
-}
-
 func TestDisabledUserAndAdminRoutes(t *testing.T) {
 	e := testenv.New(t)
 	admin := e.Admin()
@@ -204,13 +183,13 @@ func TestAccountKeysAndRateLimit(t *testing.T) {
 		t.Fatalf("bogus key: %s", r)
 	}
 
-	res := e.Client().Do("POST", "/v1/setup", map[string]any{"token": "x", "email": "x@example.com", "password": pw})
+	res := e.Client().Do("POST", "/v1/setup", map[string]any{"email": "x@example.com", "password": pw})
 	if res.Header.Get("X-RateLimit-Limit") == "" {
 		t.Fatalf("missing rate limit headers: %v", res.Header)
 	}
 	var last *testenv.Resp
 	for i := 0; i < 12; i++ {
-		last = e.Client().Do("POST", "/v1/setup", map[string]any{"token": "x", "email": "x@example.com", "password": pw})
+		last = e.Client().Do("POST", "/v1/setup", map[string]any{"email": "x@example.com", "password": pw})
 	}
 	if last.Status != 429 || last.Header.Get("Retry-After") == "" {
 		t.Fatalf("setup not rate limited: %s", last)

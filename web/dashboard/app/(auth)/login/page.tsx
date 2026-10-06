@@ -13,13 +13,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [signupOpen, setSignupOpen] = useState(false);
 
   useEffect(() => {
     api("GET", "/v1/setup")
       .then((s) => {
         if (s.open) router.replace("/setup");
-        setSignupOpen(s.signupMode === "open");
       })
       .catch(() => {});
     api("GET", "/v1/me")
@@ -31,18 +29,7 @@ export default function LoginPage() {
     <AuthCard
       title="Sign in"
       description="Use the email and password for this Sparkbase install."
-      footer={
-        signupOpen ? (
-          <>
-            New here?{" "}
-            <Link href="/signup" className="text-foreground underline underline-offset-4">
-              Create an account
-            </Link>
-          </>
-        ) : (
-          "Accounts are invite only. Ask your admin for an invite."
-        )
-      }
+      footer="New here? Ask your admin for an invite."
     >
       <form
         className="space-y-4"
