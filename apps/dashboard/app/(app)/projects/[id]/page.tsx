@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/shell";
 import { Badge, Button, Card, CardHeader, CodeBlock, ConfirmModal, CopyField, ErrorText, Field, Input, Modal, Select, Skeleton, SkeletonCards, StatusDot, cn } from "@/components/ui";
 import { KIND_BLURB, KIND_LABEL, api, useApi } from "@/lib/api";
+import { Architecture } from "@/components/architecture";
 import { ServiceLogo } from "@/components/logos/service-logo";
 import { KINDS, type Resource } from "@/lib/kinds";
 
@@ -45,7 +46,7 @@ function AddServiceModal({ open, onClose, project, onAdded, hasAuth }: { open: b
   const { data: plans } = useApi<{ plans: Plan[] }>(open ? `/v1/plans?kind=${kind}` : null);
 
   useEffect(() => {
-    setName(kind === "auth" ? "auth" : kind === "postgres" ? "main" : kind === "storage" ? "files" : kind === "cache" ? "cache" : kind === "queue" ? "jobs" : "embeddings");
+    setName(({ auth: "auth", postgres: "main", storage: "files", cache: "cache", queue: "jobs", vector: "embeddings", realtime: "live", cron: "tasks", backup: "nightly", monitor: "uptime" } as Record<string, string>)[kind] ?? kind);
     setPlan("");
     setError(null);
   }, [kind]);
@@ -269,6 +270,7 @@ export default function ProjectPage() {
                       <span className="flex items-center gap-1.5 capitalize">
                         <StatusDot status={r.status} /> {r.status}
                         {r.writeLocked && <Badge tone="paused">read-only</Badge>}
+                        {r.runtime === "container" && r.status === "active" && <span className="text-muted-foreground">· {r.awake ? "awake" : "asleep"}</span>}
                       </span>
                       <span className="text-muted-foreground capitalize">{r.plan.replace(`${r.kind}-`, "")}</span>
                     </div>
@@ -278,6 +280,8 @@ export default function ProjectPage() {
             </div>
           )}
         </section>
+
+        {resources.length > 0 && <Architecture projectRef={project.ref} resources={resources} />}
       </div>
 
       <AddServiceModal open={adding} onClose={() => setAdding(false)} project={project} onAdded={reload} hasAuth={resources.some((r) => r.kind === "auth")} />

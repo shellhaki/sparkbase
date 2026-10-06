@@ -9,13 +9,18 @@ import { PostgresBrowser } from "@/components/browsers/postgres";
 import { QueueBrowser } from "@/components/browsers/queue";
 import { StorageBrowser } from "@/components/browsers/storage";
 import { VectorBrowser } from "@/components/browsers/vector";
+import { BackupServiceBrowser } from "@/components/browsers/backup";
+import { CronBrowser } from "@/components/browsers/cron";
+import { MonitorBrowser } from "@/components/browsers/monitor";
+import { RealtimeBrowser } from "@/components/browsers/realtime";
+import { CacheTerminal, LogsPanel, MetricsPanel, PostgresTerminal } from "@/components/service-panels";
 import { PageHeader } from "@/components/shell";
 import { Badge, Button, Card, CardHeader, CodeBlock, ConfirmModal, CopyField, ErrorText, Field, Input, Meter, Select, Skeleton, StatusDot, Table, Tabs, Td } from "@/components/ui";
 import { KIND_LABEL, api, formatBytes, timeAgo, useApi } from "@/lib/api";
 import { ServiceLogo } from "@/components/logos/service-logo";
 import { type Resource } from "@/lib/kinds";
 
-type Tab = "overview" | "data" | "backups" | "settings";
+type Tab = "overview" | "data" | "logs" | "metrics" | "terminal" | "backups" | "settings";
 
 interface Connection {
   apiUrl: string;
@@ -25,6 +30,14 @@ interface Connection {
   backend?: string;
   jwtSecret?: string;
 }
+
+const DATA_TAB: Record<string, string> = {
+  auth: "Users",
+  realtime: "Channels",
+  cron: "Jobs",
+  monitor: "Checks",
+  backup: "Policy",
+};
 
 function snippet(r: Resource): string {
   const head = `import { createClient } from '@sparkbase/sdk'\nconst sb = createClient(process.env.SPARKBASE_URL, process.env.SPARKBASE_SECRET_KEY)\n\n`;
@@ -45,6 +58,25 @@ function snippet(r: Resource): string {
         head +
         `const q = sb.queue('${r.name}')\nawait q.createQueue({ name: 'emails' })\nawait q.queue('emails').send({ to: 'ada@example.com' })\n\nfor (const msg of await q.queue('emails').receive({ max: 10 })) {\n  await sendEmail(msg.body)\n  await q.queue('emails').ack(msg.id)\n}`
       );
+    case "realtime":
+      return `// Browser: listen to a public channel with the publishable key
+const es = new EventSource(\`\${process.env.NEXT_PUBLIC_SPARKBASE_URL}/realtime/${r.name}/subscribe?channel=public:room1&apikey=\${publishableKey}\`)
+es.addEventListener('message', (e) => console.log(JSON.parse(e.data)))
+
+// Server: broadcast with the secret key
+await fetch(\`\${process.env.SPARKBASE_URL}/realtime/${r.name}/broadcast\`, {
+  method: 'POST', headers: { apikey: process.env.SPARKBASE_SECRET_KEY, 'content-type': 'application/json' },
+  body: JSON.stringify({ channel: 'public:room1', event: 'chat', payload: { text: 'hi' } }),
+})`;
+    case "cron":
+      return `curl -X POST "$SPARKBASE_URL/cron/${r.name}/jobs" -H "apikey: $SPARKBASE_SECRET_KEY" \\
+  -d '{"name":"cleanup","schedule":"0 3 * * *","action":{"type":"sql","postgres":"main","sql":"delete from sessions where expires_at < now()"}}'`;
+    case "monitor":
+      return `curl -X POST "$SPARKBASE_URL/monitor/${r.name}/checks" -H "apikey: $SPARKBASE_SECRET_KEY" \\
+  -d '{"name":"api","url":"https://myapp.com/health","intervalSeconds":60}'`;
+    case "backup":
+      return `curl -X PATCH "$SPARKBASE_URL/backup/${r.name}/settings" -H "apikey: $SPARKBASE_SECRET_KEY" \\
+  -d '{"targets":["main"],"schedule":"0 3 * * *","retentionDays":7}'`;
     case "auth":
       return `// In the browser, with the publishable key\nconst sb = createClient(process.env.NEXT_PUBLIC_SPARKBASE_URL, process.env.NEXT_PUBLIC_SPARKBASE_PUBLISHABLE_KEY, { storage: localStorage })\n\nawait sb.auth.signUp({ email, password })\nawait sb.auth.signInWithPassword({ email, password })\nconst user = await sb.auth.getUser()\nconst token = await sb.auth.getAccessToken() // send to your server, verify with the JWT secret`;
   }
@@ -386,7 +418,10 @@ export default function ServicePage() {
   const hasBackups = ["postgres", "vector", "queue", "auth"].includes(r.kind);
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: "overview", label: "Overview" },
-    { id: "data", label: r.kind === "auth" ? "Users" : "Data" },
+    { id: "data", label: DATA_TAB[r.kind] ?? "Data" },
+    { id: "logs", label: "Logs" },
+    { id: "metrics", label: "Metrics" },
+    ...(r.kind === "postgres" || r.kind === "cache" ? [{ id: "terminal" as Tab, label: "Terminal" }] : []),
     ...(hasBackups ? [{ id: "backups" as Tab, label: "Backups" }] : []),
     { id: "settings", label: "Settings" },
   ];
@@ -403,6 +438,9 @@ export default function ServicePage() {
         description={
           <span className="flex items-center gap-2">
             {KIND_LABEL[r.kind]} · <StatusDot status={r.status} /> {r.status}
+            {r.runtime === "container" && r.status === "active" && (
+              <Badge tone={r.awake ? "active" : "queued"}>{r.awake ? "awake" : "asleep · wakes on use"}</Badge>
+            )}
             {r.writeLocked && <Badge tone="paused">read-only</Badge>}
           </span>
         }
@@ -425,7 +463,7 @@ export default function ServicePage() {
       ) : (
         <div className="space-y-6">
           <Tabs tabs={tabs} value={tab} onChange={setTab} />
-          {r.status !== "active" && tab === "data" ? (
+          {r.status !== "active" && (tab === "data" || tab === "terminal") ? (
             <ErrorText error={`The service is ${r.status}. Resume it to browse data.`} />
           ) : (
             <>
@@ -436,6 +474,14 @@ export default function ServicePage() {
               {tab === "data" && r.kind === "vector" && <VectorBrowser r={r} />}
               {tab === "data" && r.kind === "queue" && <QueueBrowser r={r} />}
               {tab === "data" && r.kind === "auth" && <AuthBrowser r={r} />}
+              {tab === "data" && r.kind === "realtime" && <RealtimeBrowser r={r} />}
+              {tab === "data" && r.kind === "cron" && <CronBrowser r={r} />}
+              {tab === "data" && r.kind === "monitor" && <MonitorBrowser r={r} />}
+              {tab === "data" && r.kind === "backup" && <BackupServiceBrowser r={r} />}
+              {tab === "logs" && <LogsPanel r={r} />}
+              {tab === "metrics" && <MetricsPanel r={r} />}
+              {tab === "terminal" && r.kind === "postgres" && <PostgresTerminal r={r} />}
+              {tab === "terminal" && r.kind === "cache" && <CacheTerminal r={r} />}
               {tab === "backups" && <Backups r={r} />}
               {tab === "settings" && <Settings r={r} reload={reload} />}
             </>

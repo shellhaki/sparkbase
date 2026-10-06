@@ -578,6 +578,139 @@ export class AuthClient {
   }
 }
 
+// Realtime
+
+export interface RealtimeMessage<T = unknown> {
+  channel: string
+  event: string
+  payload: T
+  at: string
+}
+
+export class RealtimeClient {
+  constructor(
+    private t: Transport,
+    readonly name: string,
+  ) {}
+  private get base() {
+    return `/realtime/${enc(this.name)}`
+  }
+  /** Send to a channel (secret key). */
+  async broadcast(channel: string, payload: unknown, opts: { event?: string } = {}): Promise<void> {
+    await this.t.request('POST', `${this.base}/broadcast`, { body: { channel, payload, event: opts.event ?? 'message' } })
+  }
+  /**
+   * Listen to channels. With the publishable key only `public:` channels are
+   * allowed. Table changes arrive on `db:SERVICE:TABLE`. Returns a function
+   * that stops listening.
+   */
+  subscribe<T = unknown>(channels: string[], onMessage: (m: RealtimeMessage<T>) => void, opts: { onError?: (e: unknown) => void } = {}): () => void {
+    const q = channels.map((c) => `channel=${enc(c)}`).join('&') + `&apikey=${enc(this.t.key)}`
+    const url = `${this.t.url}${this.base}/subscribe?${q}`
+    const ctrl = new AbortController()
+    ;(async () => {
+      while (!ctrl.signal.aborted) {
+        try {
+          const res = await this.t.fetchFn(url, { signal: ctrl.signal, headers: { Accept: 'text/event-stream' } })
+          if (!res.ok || !res.body) throw toError(res.status, await res.json().catch(() => ({})))
+          const reader = res.body.getReader()
+          const dec = new TextDecoder()
+          let buf = ''
+          for (;;) {
+            const { value, done } = await reader.read()
+            if (done) break
+            buf += dec.decode(value, { stream: true })
+            let i: number
+            while ((i = buf.indexOf('\n\n')) >= 0) {
+              const block = buf.slice(0, i)
+              buf = buf.slice(i + 2)
+              const event = /^event: (.*)$/m.exec(block)?.[1]
+              const data = /^data: (.*)$/m.exec(block)?.[1]
+              if (event === 'message' && data) onMessage(JSON.parse(data))
+            }
+          }
+        } catch (e) {
+          if (ctrl.signal.aborted) return
+          opts.onError?.(e)
+          if (e instanceof ForbiddenError || e instanceof UnauthorizedError) return
+        }
+        await new Promise((r) => setTimeout(r, 2000))
+      }
+    })()
+    return () => ctrl.abort()
+  }
+  /** Stream inserts, updates and deletes of a table on db:POSTGRES:TABLE. */
+  async watchTable(postgres: string, table: string): Promise<string> {
+    const out = await this.t.request<{ channel: string }>('POST', `${this.base}/watches`, { body: { postgres, table } })
+    return out.channel
+  }
+}
+
+// Cron, monitor and backup services
+
+export class CronClient {
+  constructor(
+    private t: Transport,
+    readonly name: string,
+  ) {}
+  private get base() {
+    return `/cron/${enc(this.name)}/jobs`
+  }
+  async list(): Promise<Array<Record<string, unknown>>> {
+    return (await this.t.request<{ jobs: Array<Record<string, unknown>> }>('GET', this.base)).jobs
+  }
+  async create(job: { name: string; schedule: string; action: Record<string, unknown> }): Promise<Record<string, unknown>> {
+    return (await this.t.request<{ job: Record<string, unknown> }>('POST', this.base, { body: job })).job
+  }
+  async update(id: string, patch: { schedule?: string; action?: Record<string, unknown>; enabled?: boolean }): Promise<Record<string, unknown>> {
+    return (await this.t.request<{ job: Record<string, unknown> }>('PATCH', `${this.base}/${enc(id)}`, { body: patch })).job
+  }
+  async remove(id: string): Promise<void> {
+    await this.t.request('DELETE', `${this.base}/${enc(id)}`)
+  }
+  run(id: string): Promise<{ status: string; output: string }> {
+    return this.t.request('POST', `${this.base}/${enc(id)}/run`)
+  }
+}
+
+export class MonitorClient {
+  constructor(
+    private t: Transport,
+    readonly name: string,
+  ) {}
+  private get base() {
+    return `/monitor/${enc(this.name)}/checks`
+  }
+  async list(): Promise<Array<Record<string, unknown>>> {
+    return (await this.t.request<{ checks: Array<Record<string, unknown>> }>('GET', this.base)).checks
+  }
+  async create(check: { name: string; url: string; method?: string; intervalSeconds?: number; expectStatus?: number }): Promise<Record<string, unknown>> {
+    return (await this.t.request<{ check: Record<string, unknown> }>('POST', this.base, { body: check })).check
+  }
+  async remove(id: string): Promise<void> {
+    await this.t.request('DELETE', `${this.base}/${enc(id)}`)
+  }
+}
+
+export class BackupClient {
+  constructor(
+    private t: Transport,
+    readonly name: string,
+  ) {}
+  private get base() {
+    return `/backup/${enc(this.name)}`
+  }
+  async settings(patch?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const out = patch
+      ? await this.t.request<{ settings: Record<string, unknown> }>('PATCH', `${this.base}/settings`, { body: patch })
+      : await this.t.request<{ settings: Record<string, unknown> }>('GET', `${this.base}/settings`)
+    return out.settings
+  }
+  async run(): Promise<number> {
+    return (await this.t.request<{ started: number }>('POST', `${this.base}/run`)).started
+  }
+}
+
 // Client
 
 export class SparkbaseClient {
@@ -618,6 +751,18 @@ export class SparkbaseClient {
   }
   queue(name: string) {
     return new QueueClient(this.t, name)
+  }
+  realtime(name: string) {
+    return new RealtimeClient(this.t, name)
+  }
+  cron(name: string) {
+    return new CronClient(this.t, name)
+  }
+  monitor(name: string) {
+    return new MonitorClient(this.t, name)
+  }
+  backup(name: string) {
+    return new BackupClient(this.t, name)
   }
 }
 

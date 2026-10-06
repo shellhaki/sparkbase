@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -46,8 +47,35 @@ func (s *Server) resourceJSON(r *store.Resource) map[string]any {
 		"id": r.ID, "projectId": r.ProjectID, "projectRef": r.ProjectSlug, "kind": r.Kind, "name": r.Name,
 		"plan": r.PlanID, "limits": r.Limits, "status": r.Status, "writeLocked": r.WriteLocked,
 		"endpoint": r.Endpoint, "lastError": r.LastError, "lastActiveAt": r.LastActiveAt,
-		"createdAt": r.CreatedAt, "apiUrl": s.apiURL(r), "runtime": r.Runtime,
+		"createdAt": r.CreatedAt, "apiUrl": s.apiURL(r), "runtime": r.Runtime, "links": serviceLinks(r),
 	}
+}
+
+// serviceLinks lists the other services a service uses, for the
+// architecture view. Only names; never settings that hold secrets.
+func serviceLinks(r *store.Resource) []string {
+	var v struct {
+		Watches []struct {
+			Postgres string `json:"postgres"`
+		} `json:"watches"`
+		Targets []string `json:"targets"`
+	}
+	_ = json.Unmarshal(r.Settings, &v)
+	seen := map[string]bool{}
+	out := []string{}
+	for _, w := range v.Watches {
+		if !seen[w.Postgres] {
+			seen[w.Postgres] = true
+			out = append(out, w.Postgres)
+		}
+	}
+	for _, t := range v.Targets {
+		if !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // withRuntime adds whether a container service is awake right now.

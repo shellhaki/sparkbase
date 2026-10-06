@@ -4,13 +4,14 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LiveLogs } from "@/components/live-logs";
 import { PageHeader, useSession } from "@/components/shell";
 import { Badge, Button, Card, CardHeader, CopyField, ErrorText, Field, Input, Modal, Select, SkeletonCards, SkeletonRows, StatusDot, Table, Tabs, Td, Textarea } from "@/components/ui";
 import { KIND_LABEL, api, timeAgo, useApi } from "@/lib/api";
 import type { Resource } from "@/lib/kinds";
 import { ServiceLogo } from "@/components/logos/service-logo";
 
-type Tab = "users" | "services" | "plans" | "hosts" | "settings" | "activity" | "health";
+type Tab = "users" | "services" | "plans" | "hosts" | "settings" | "activity" | "health" | "logs";
 
 interface User {
   id: string;
@@ -537,6 +538,8 @@ interface Settings {
   resourceCap: number;
   membersChangePlans: boolean;
   rotationGraceSeconds: number;
+  idleMinutes: number;
+  allowPrivateTargets: boolean;
 }
 
 function InstallSettings() {
@@ -573,6 +576,9 @@ function InstallSettings() {
           <Field label="Auto-pause idle services after (days)" hint="0 turns it off.">
             <Input type="number" min={0} max={365} value={form.autoPauseDays} onChange={(e) => setForm({ ...form, autoPauseDays: Number(e.target.value) })} />
           </Field>
+          <Field label="Stop idle containers after (minutes)" hint="Databases and caches in containers stop after this long unused and start again on the next connection. 0 keeps them running.">
+            <Input type="number" min={0} max={1440} value={form.idleMinutes} onChange={(e) => setForm({ ...form, idleMinutes: Number(e.target.value) })} />
+          </Field>
           <Field label="Credential rotation grace period (seconds)">
             <Input type="number" min={0} value={form.rotationGraceSeconds} onChange={(e) => setForm({ ...form, rotationGraceSeconds: Number(e.target.value) })} />
           </Field>
@@ -580,6 +586,10 @@ function InstallSettings() {
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" className="size-4 accent-[var(--brand)]" checked={form.membersChangePlans} onChange={(e) => setForm({ ...form, membersChangePlans: e.target.checked })} />
           Members may change their services' plans
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="size-4 accent-[var(--brand)]" checked={form.allowPrivateTargets} onChange={(e) => setForm({ ...form, allowPrivateTargets: e.target.checked })} />
+          Let cron jobs and uptime checks call private network addresses
         </label>
         <ErrorText error={error} />
         <div className="flex items-center justify-end gap-3">
@@ -701,6 +711,7 @@ export default function AdminPage() {
             { id: "settings", label: "Settings" },
             { id: "activity", label: "Audit log" },
             { id: "health", label: "Health" },
+            { id: "logs", label: "Server logs" },
           ]}
         />
         {tab === "users" && <Users />}
@@ -710,6 +721,7 @@ export default function AdminPage() {
         {tab === "settings" && <InstallSettings />}
         {tab === "activity" && <Activity />}
         {tab === "health" && <Health />}
+        {tab === "logs" && <LiveLogs path="/v1/admin/logs" />}
       </div>
     </>
   );

@@ -43,6 +43,8 @@ describe.skipIf(!live)('sdk against a live server', () => {
       ['vector', 'docs'],
       ['queue', 'jobs'],
       ['auth', 'auth'],
+      ['realtime', 'live'],
+      ['cron', 'tasks'],
     ]) {
       ids.push((await mgmt('POST', `/v1/projects/${project.id}/resources`, { kind, name })).resource.id)
     }
@@ -75,7 +77,7 @@ describe.skipIf(!live)('sdk against a live server', () => {
 
   test('info lists services with the secret key', async () => {
     const info = await secret.info()
-    expect(info.services?.map((s) => s.kind).sort()).toEqual(['auth', 'cache', 'postgres', 'queue', 'storage', 'vector'])
+    expect(info.services?.map((s) => s.kind).sort()).toEqual(['auth', 'cache', 'cron', 'postgres', 'queue', 'realtime', 'storage', 'vector'])
   })
 
   test('postgres', async () => {
@@ -166,5 +168,22 @@ describe.skipIf(!live)('sdk against a live server', () => {
     const res = await other.auth.verifyOtp({ token: link.token })
     expect(res.user.email).toBe('otp@example.com')
     await secret.auth.admin.deleteUser(users[0].id)
+  })
+
+  test('realtime broadcast and subscribe', async () => {
+    const got: unknown[] = []
+    const stop = pub.realtime('live').subscribe(['public:room'], (m) => got.push(m.payload))
+    await Bun.sleep(400)
+    await secret.realtime('live').broadcast('public:room', { text: 'hi' })
+    for (let i = 0; i < 50 && got.length === 0; i++) await Bun.sleep(100)
+    stop()
+    expect(got).toEqual([{ text: 'hi' }])
+  })
+
+  test('cron jobs', async () => {
+    const job = await secret.cron('tasks').create({ name: 'tick', schedule: '*/5 * * * *', action: { type: 'sql', postgres: 'main', sql: 'select 1' } })
+    const res = await secret.cron('tasks').run(job.id as string)
+    expect(res.status).toBe('ok')
+    expect((await secret.cron('tasks').list()).length).toBe(1)
   })
 })
