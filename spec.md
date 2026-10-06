@@ -4,204 +4,229 @@ Oct 6, 2026 · @Excel
 
 ## Overview
 
-Sparkbase is an open-source, self-hosted data platform. You run it on your own server, create a project, attach only the data services your backend needs, and connect to each one through a native connection string, an SDK, or an HTTP API. Nothing is bundled, and nothing is sold: there is no paid tier, no hosted edition and no feature gating.
+Sparkbase is an open-source, self-hosted backend platform. You run it on your own server, create a project, and add only the services your app needs: a Postgres database, a cache, object storage, a vector database, queues and an auth API. Each service is reachable two ways:
 
-**Pitch:** the data layer for your backend, on your own server, with exactly the services you need.
+1. **Through the project API and SDK.** Every project has a **project URL** and **project API keys**, like Supabase. `createClient(projectUrl, apiKey)` gives your app every service in the project over HTTPS.
+2. **Natively.** Services that have a standard protocol (Postgres, Redis, S3) also hand out a native connection string, so existing drivers, ORMs and tools keep working.
+
+Nothing is sold: there is no paid tier, no hosted edition and no feature gating.
+
+**Pitch:** add the backend services your app needs to a project, on your own server, and use them from one SDK.
 
 **Who it is for**
 
-- Solo developers and indie hackers who want managed-feeling Postgres, Redis and object storage on a VPS they already pay for.
+- Solo developers and indie hackers who want Supabase-style convenience on a VPS they already pay for.
 - Small teams, agencies, classrooms and clubs where one person runs the server and invites the others.
-- Developers who want the convenience of a data platform without handing their data to a third party.
+- Developers who want a backend platform without handing their data to a third party.
 
-**Positioning.** Bundled platforms such as Supabase and Firebase are built around their own auth and client libraries. Running Postgres, Redis and an S3 server by hand on a VPS means doing pooling, TLS, credentials, backups and limits yourself for every project. Sparkbase is one `docker compose up` that gives every project its own isolated databases, caches and storage folders, with TLS, credentials, limits and backups already done.
+**Positioning.** Supabase and Firebase bundle a fixed set of services around one database. Running Postgres, Redis, an S3 server, a vector store, a queue and an auth server by hand means doing credentials, limits, backups and an API for each. Sparkbase makes each of them a service you add to a project in one click, with isolation, limits, keys and one SDK already done.
 
 **Product principles**
 
-1. **Open source, all of it.** One codebase, one edition. Self-hosting is the product, not a side door.
-2. **Native first.** Every resource speaks its standard protocol, so existing drivers, ORMs and tools keep working. The SDK and API are conveniences, never a wall.
-3. **One command to run.** A clean server with Docker and a domain gets to a working Postgres resource in minutes, with HTTPS.
-4. **Shared hosts now, more hosts later.** Stable per-resource hostnames make moving a resource between hosts invisible to its users.
-5. **Limits protect the server.** The operator sets limits per resource so one project cannot take down the others.
-6. **Boring technology.** Node, Hono, Postgres, Redis, Traefik, and plain SQL with no ORM.
+1. **Open source, all of it.** One codebase, one edition. Self-hosting is the product.
+2. **Pick your services.** A project starts empty. You add the services you need, and only those run for you.
+3. **One URL, one key, one SDK.** Every service in a project is reachable from the project URL with a project API key.
+4. **Native when it exists.** Services with a standard protocol also give a native connection string. The SDK is a convenience, never a wall.
+5. **Limits protect the server.** The operator sets limits per service so one project cannot take down the others.
+6. **Boring technology.** Go, Postgres, Redis, plain SQL with no ORM. Traefik only for the network edge.
 
 ## Product model
 
-The product is five nouns: an **operator** runs an install, **users** own **projects**, a project holds **resources**, and each resource sits on a **plan** that sets its limits.
+The product is a few nouns: an **operator** runs an install, **users** own **projects**, a project holds **services** (called resources in the API and database), each service sits on a **plan** that sets its limits, and each project has **project API keys**.
 
 | Concept | What it is | Notes |
 | --- | --- | --- |
 | Install | One Sparkbase deployment on a server (or a few) | Run by one operator |
-| User | A person with a login and API keys | Role `admin` or `member`. Admins manage users, hosts and plans |
-| Project | A named container | Has a short slug used in hostnames, e.g. `a1b2c3` |
-| Resource | One data service inside a project | Has a kind, a plan, a host, a status and credentials |
-| Plan | A named limits preset for one resource kind | Defined by the admin. No prices. Seeded with Small, Medium and Large |
-| Host | A server or bucket that holds many resources of one kind | Invisible to members; chosen by the scheduler |
+| User | A person with a login and account API keys | Role `admin` or `member`. Admins manage users, hosts and plans |
+| Project | A named container with a project URL | Has a short `ref` (slug), e.g. `a1b2c3`, used in its URL and hostnames |
+| Service (resource) | One backend service inside a project | Has a kind, a name, a plan, a host, a status and credentials |
+| Project API key | Key an app uses to call the project's services | Publishable (`sbp_`, safe in browsers) or secret (`sbs_`, server only) |
+| Plan | A named limits preset for one service kind | Defined by the admin. No prices. Seeded with Small, Medium and Large |
+| Host | A server that holds many services of one engine | Invisible to members; chosen by the scheduler |
 
-**Who can sign up.** Signup is invite-only by default. An admin invites people by email (or copies the invite link when no SMTP server is configured). An admin can switch the install to open signup in settings. The first admin is created during first-run setup.
+**Who can sign up.** Signup is invite-only by default. An admin invites people by email (or copies the invite link when no SMTP server is configured). An admin can switch the install to open signup. The first admin is created during first-run setup.
 
-**Resource catalog**
+**Service catalog**
 
-| Resource | Engine | Native protocol | Phase |
-| --- | --- | --- | --- |
-| Relational database | PostgreSQL | Postgres wire over TLS | First release |
-| Cache | Redis (Valkey-compatible) | RESP over TLS | First release |
-| Object storage | Garage (S3-compatible), bundled | S3 API | First release |
-| Vector database | pgvector on the Postgres hosts | Postgres wire + SDK | Phase 2 |
-| NoSQL database | MongoDB | Mongo wire | Phase 2 |
-| Relational (other engines) | MySQL, MariaDB | MySQL wire | Phase 2 |
-| Auth, realtime, queues | Built in | HTTP, WebSocket + SDK | Phase 3 |
+| Service | Kind | Engine | Project API | Native access | Phase |
+| --- | --- | --- | --- | --- | --- |
+| Database | `postgres` | PostgreSQL | SQL over HTTP, schema | Postgres wire over TLS | First release |
+| Cache | `cache` | Redis (Valkey-compatible) | Key/value get, set, delete, batch | RESP over TLS | First release |
+| Object storage | `storage` | Garage (S3) or local disk | Upload, download, list, delete, signed URLs | S3 API (Garage backend) | First release |
+| Vector database | `vector` | pgvector on the Postgres hosts | Collections, upsert, similarity query | Postgres wire | First release |
+| Queues | `queue` | Postgres (`SKIP LOCKED`) on the Postgres hosts | Create queues, send, receive, ack, nack | none | First release |
+| Auth | `auth` | Postgres on the Postgres hosts, JWT | Sign up, sign in, refresh, user, admin users | none | First release |
+| NoSQL | `mongo` | MongoDB | later | Mongo wire | Later |
+| Realtime | `realtime` | built in | later | WebSocket | Later |
+
+A project can have many services of each kind, except `auth`: a project has at most one auth service, because end users belong to the project.
 
 **The core user flow**
 
-1. The operator runs `docker compose up -d`, completes first-run setup and invites people.
-2. A user signs in and creates a project.
-3. They add a resource: pick a kind, a name and a plan.
-4. They wait a few seconds while it provisions, then copy the connection string or run `sparkbase env pull`.
-5. They connect with any native driver, or use the SDK and HTTP API.
+1. The operator runs the install, completes first-run setup and invites people.
+2. A user signs in and creates a project. The project gets a URL and two API keys.
+3. They add services: pick a kind, a name and a plan.
+4. They wait a few seconds while each one provisions.
+5. Their app calls `createClient(projectUrl, key)` and uses `sb.postgres('main')`, `sb.cache('sessions')`, `sb.storage('uploads')`, `sb.vector('docs')`, `sb.queue('jobs')` and `sb.auth`. Or it copies a native connection string.
 
-**Resource lifecycle**
+**Service lifecycle**
 
 | Status | Meaning | Reached by |
 | --- | --- | --- |
 | provisioning | Worker is creating it on a host | Create call |
 | active | Healthy and usable | Provisioning succeeded, or resume |
-| paused | Connections refused, data kept | Owner or admin action |
+| paused | Requests and connections refused, data kept | Owner or admin action |
 | suspended | Blocked by an admin, data kept | Admin action |
 | failed | Provisioning did not finish | Retries exhausted; owner can retry or delete |
 | deleting | Teardown in progress | Delete call |
 
 ## Architecture
 
-Sparkbase splits into a control plane that decides things and a data plane that serves them. A user's application talks to the data plane directly over native protocols, through Traefik, so the control plane can be down for a while without breaking a running app.
+Sparkbase splits into a control plane that decides things and a data plane that serves them. The control plane is one Go binary that runs the API (management API and project API) and the worker. The data plane is the engines: Postgres hosts, Redis hosts and object storage.
 
 ```text
-                       Internet
-                           │
-                 ┌─────────▼─────────┐
-                 │      Traefik      │  :443 HTTPS + TLS for Postgres and Redis (SNI)
-                 │  (ACME certs)     │  :80  redirect + ACME HTTP-01
-                 └──┬─────┬──────┬───┘
-       app.example.com    │      │ *.db / *.cache / s3.example.com
-                    │     │      │
-        ┌───────────▼┐ ┌──▼────┐ │      ┌──────────────────────────────┐
-        │ dashboard  │ │  api  │ └─────►│ data plane                   │
-        └────────────┘ └──┬────┘        │ PgBouncer → Postgres host(s) │
-                          │ jobs        │ Redis host(s)                │
-                     ┌────▼───┐         │ Garage (S3)                  │
-                     │ worker ├────────►│                              │
-                     └────┬───┘ admin   └──────────────────────────────┘
-                          │
-            control-plane Postgres + Redis
+          app (SDK)          dashboard / CLI           native clients
+              │                    │                         │
+              ▼                    ▼                         ▼
+   ┌─────────────────────────────────────────┐     ┌─────────────────┐
+   │ Traefik (edge only: HTTPS, TLS, SNI)     │────►│ native TCP: pg, │
+   └───────────────┬─────────────────────────┘     │ redis, s3       │
+                   ▼                               └───────┬─────────┘
+   ┌──────────────────────────────┐                        │
+   │ sparkbase-server             │  project API:          │
+   │  ├─ management API  /v1      │  SQL, kv, objects,     ▼
+   │  ├─ project API     /p/{ref} │──vectors, queues,──► data plane
+   │  └─ worker (jobs)            │  auth               Postgres host(s)
+   └──────────────┬───────────────┘                     Redis host(s)
+                  ▼                                     Garage / local disk
+     control-plane Postgres + Redis
 ```
-
-The dashboard, CLI and SDK call the API. The API writes metadata and queues jobs, and the worker claims them and acts on the data hosts. Applications skip all of that and connect straight to their resource hostname, which Traefik routes to the right host.
 
 **Components**
 
 | Component | Role | Technology |
 | --- | --- | --- |
-| Traefik | Edge proxy: HTTPS for the API, dashboard and S3 endpoint; TLS termination and SNI routing for Postgres and Redis; ACME certificates | Traefik v3 |
-| API | Auth, projects, resources, plans, admin, the data API, Traefik dynamic config | Node, Hono |
-| Worker | Provisioning, usage sampling, limit enforcement, backups, host moves, email | Node, same codebase |
-| Control DB | Users, projects, resources, plans, hosts, jobs, audit log | Postgres |
-| Redis | Rate limits, short-lived counters, sessions cache | Redis |
-| Postgres hosts | Tenant databases behind a pooler | Postgres, PgBouncer |
+| API | Management API (`/v1`), project API (`/p/{ref}`), Traefik dynamic config | Go, `net/http` |
+| Worker | Provisioning, usage sampling, limit enforcement, backups, email | Go, same binary |
+| Control DB | Users, projects, keys, services, plans, hosts, jobs, audit log | Postgres |
+| Control Redis | Rate limits, request counters | Redis |
+| Postgres hosts | Tenant databases for `postgres`, `vector`, `queue` and `auth` services | Postgres (+ PgBouncer, pgvector) |
 | Redis hosts | Tenant cache namespaces | Redis or Valkey with ACLs |
-| Object storage | One bucket and one access key per resource | Garage |
-| Dashboard | Web UI over the same public API | Next.js |
+| Object storage | One bucket and one key per service (Garage), or one directory per service (local) | Garage or the local filesystem |
+| Traefik | Edge proxy: HTTPS for the API and dashboard; TLS and SNI routing for native Postgres and Redis | Traefik v3 |
+| Dashboard | Web UI over the management and project APIs | Next.js on Bun |
 
 **Architecture rules**
 
-- **The control plane is not on the data path.** Native connections go through Traefik to the data hosts and never through the API. Only the optional HTTP data API passes through the API.
-- **Hosts are interchangeable.** A host is a row with a weight and a status. Adding capacity is registering another host; retiring one is draining it.
-- **One stable hostname per resource.** Users never see which host holds their data, which is what makes moves possible.
-- **Secrets live in one place.** Credentials are stored encrypted in the control DB and are decrypted only by the worker and the API when needed.
+- **The project API is the main way in.** Every service is usable over HTTPS from the project URL with a project key. Native access is an extra for services that have a protocol.
+- **Traefik is networking only.** It terminates TLS and routes. No product logic lives in it. The API and worker run and are tested without it.
+- **Hosts are interchangeable.** A host is a row with a weight and a status. Adding capacity is registering another host.
+- **One stable name per service.** Users never see which host holds their data, which makes moves possible.
+- **Secrets live in one place.** Credentials are stored encrypted in the control DB and decrypted only by the API and worker.
 - **Every long operation is a job.** The API answers fast with a status, the worker does the slow part, and retries are safe because each step is idempotent.
-- **No vendor assumptions.** Configuration is environment variables. TLS comes from Traefik's ACME resolver or certificates the operator provides. Nothing is hardcoded to a cloud provider.
+- **No vendor assumptions.** Configuration is environment variables. Nothing is hardcoded to a cloud provider.
+
+## Project URL and API keys
+
+Every project has one URL and two kinds of project key.
+
+**Project URL.** `https://api.<domain>/p/<ref>`, for example `https://api.example.com/p/a1b2c3`. In development, `http://localhost:8787/p/a1b2c3`. Path-based URLs need no extra DNS records.
+
+**Project keys.** Created with the project and rotatable at any time.
+
+| Key | Prefix | Where it goes | Can do |
+| --- | --- | --- | --- |
+| Publishable | `sbp_` | Browsers and mobile apps | Auth public routes (sign up, sign in, refresh, sign out, current user) and nothing else |
+| Secret | `sbs_` | Servers only | Every project API route for every service in the project |
+
+Keys are sent in the `apikey` header, or as `Authorization: Bearer <key>` when no end-user token is sent. An end user's access token from the auth service goes in `Authorization: Bearer <jwt>` together with the `apikey` header.
+
+Keys are stored as a SHA-256 hash for lookup and AES-256-GCM encrypted so the owner can view them again in the dashboard. A user's own session or account API key (`sb_`) also works on the project API for projects they own, which is how the dashboard browses data.
+
+Row-level access for end users (anonymous or signed-in users reading data under policies) is a later phase. Until then, data access from untrusted clients goes through the developer's own server with the secret key, or through signed storage URLs.
 
 ## Networking, TLS and Traefik
 
-Traefik is the only container that publishes ports. Everything else lives on internal Docker networks.
+Traefik is the network edge and nothing more. It is the only container that publishes ports in the Docker install. Everything else lives on internal networks.
 
-**Hostnames.** The operator sets one base domain, `SPARKBASE_DOMAIN`, for example `example.com`. Sparkbase uses:
+**Hostnames.** The operator sets one base domain, `SPARKBASE_DOMAIN`, for example `example.com`.
 
 | Hostname | Routed to | Protocol |
 | --- | --- | --- |
 | `app.<domain>` | Dashboard | HTTPS |
-| `api.<domain>` | API | HTTPS |
-| `s3.<domain>` | Garage S3 API | HTTPS |
-| `<slug>.db.<domain>` | The resource's Postgres host (via PgBouncer) | Postgres wire, TLS |
-| `<slug>.cache.<domain>` | The resource's Redis host | RESP, TLS |
+| `api.<domain>` | API, including every project URL | HTTPS |
+| `s3.<domain>` | Garage S3 API (Garage backend only) | HTTPS |
+| `<name>-<ref>.db.<domain>` | The service's Postgres host (`postgres` and `vector`) | Postgres wire, TLS |
+| `<name>-<ref>.cache.<domain>` | The service's Redis host | RESP, TLS |
 
-The operator creates DNS records once: `app`, `api` and `s3` pointing at the server, plus wildcard records `*.db` and `*.cache`. Sparkbase never needs DNS API access for routing. Moving a resource to another host changes Traefik's routing, not DNS.
+DNS records: `app`, `api` and `s3`, plus wildcards `*.db` and `*.cache`.
 
-**Ports.** Traefik publishes `80` (redirect and ACME HTTP-01), `443` (HTTPS), `5432` (Postgres direct), `6432` (Postgres pooled) and `6380` (Redis TLS). Each data port is a Traefik TCP entrypoint.
+**Ports.** `80`, `443`, `5432` (Postgres direct), `6432` (Postgres pooled) and `6380` (Redis TLS).
 
-**TLS for Postgres and Redis.** Traefik terminates TLS and routes by SNI. Postgres clients negotiate TLS with STARTTLS, which Traefik v3 supports on TCP routers, and libpq sends SNI by default (`sslsni=1`). Clients connect with `sslmode=require` (or `verify-full`, since the certificate is valid for the hostname). Redis clients connect with `rediss://`. Traffic from Traefik to the data hosts stays on the internal network.
+**TLS for Postgres and Redis.** Traefik terminates TLS and routes by SNI. Postgres clients negotiate TLS with STARTTLS, which Traefik v3 supports on TCP routers, and libpq sends SNI by default. Clients use `sslmode=require`. Redis clients use `rediss://`.
 
-**Certificates.** Two supported modes, chosen with `TLS_MODE`:
+**Certificates.** `TLS_MODE` is `acme-dns` (wildcards, recommended), `acme-http` (one certificate per hostname) or `custom` (mounted files).
 
-1. `acme-dns` (recommended): one wildcard certificate per data domain (`*.db.<domain>`, `*.cache.<domain>`) through the ACME DNS-01 challenge, using any DNS provider Traefik supports. New resources work instantly with no new certificate.
-2. `acme-http`: one certificate per hostname through HTTP-01. Works without DNS API credentials, but each new resource waits for its certificate, and Let's Encrypt rate limits apply to installs with many resources.
+**Dynamic routing.** Traefik polls `GET /internal/traefik/config` (internal network, shared token). It returns one TCP router per active native service with `HostSNI` on its endpoint. Paused, suspended and deleted services get no router.
 
-A third option, `custom`, loads certificate files the operator mounts.
-
-**Dynamic routing.** Traefik reads its routers from the API through the HTTP provider (`GET /internal/traefik/config`, served on the internal network only and protected by a shared token). The endpoint builds one TCP router per active resource (`HostSNI(\`a1b2c3.db.example.com\`)` to that resource's host) from the `resources` and `hosts` tables. Traefik polls it every few seconds. Paused, suspended and deleted resources get no router, which closes their port at the edge in addition to the credential-level block. With a single data host, a catch-all `HostSNIRegexp` router is a valid shortcut, but the per-resource routers are the default because they make host moves and edge blocking work.
+**Without Traefik.** For development and for installs that only use the project API, Sparkbase runs without Traefik: the API listens on `PORT` and native connection strings point straight at the host address. `NATIVE_MODE=direct` selects this.
 
 ## Tenancy and isolation
 
-An install runs shared hosts: each engine lives on one server to start (the same server as everything else in the single-host setup), and every resource gets an isolated slice of it. Users on the same install must not be able to reach each other's data, even though they share hosts. Treat that as the core promise of the project.
+An install runs shared hosts, and every service gets an isolated slice of one. Users on the same install must not reach each other's data. Treat that as the core promise of the project.
 
 **Per-engine isolation**
 
-| Engine | Unit of isolation | Access control | Main risk |
-| --- | --- | --- | --- |
-| Postgres | One database plus one role per resource | `REVOKE CONNECT ON DATABASE ... FROM PUBLIC`, non-superuser roles, `scram-sha-256`, TLS required | Noisy neighbors on CPU and IO; no native CPU quota |
-| Redis | One ACL user per resource, restricted to a key prefix | `~prefix:*` key pattern; `KEYS`, `FLUSHALL`, `FLUSHDB`, `CONFIG`, `DEBUG`, `SCRIPT`, `EVAL`, `EVALSHA`, `FUNCTION` and `MODULE` denied | Memory and CPU are global; eviction can hit other tenants |
-| Object storage | One Garage bucket plus one access key per resource | The key is allowed on its own bucket only; no tenant key is ever allowed on another bucket or the backups bucket | Disk and IO are shared |
+| Service | Unit of isolation | Access control |
+| --- | --- | --- |
+| `postgres` | One database plus one role | `REVOKE CONNECT ... FROM PUBLIC` on every database, non-superuser roles, `scram-sha-256` |
+| `vector` | One database plus one role (pgvector inside) | Same as `postgres` |
+| `queue` | One database plus one role | Same as `postgres`; native access not offered |
+| `auth` | One database plus one role; one JWT signing secret | Same as `postgres`; native access not offered |
+| `cache` | One ACL user restricted to a key prefix | `~prefix:*`; `KEYS`, `FLUSHALL`, `FLUSHDB`, `CONFIG`, `DEBUG`, `SCRIPT`, `EVAL`, `EVALSHA`, `FUNCTION`, `MODULE`, `ACL`, `SHUTDOWN`, `MIGRATE` and admin commands denied |
+| `storage` (Garage) | One bucket plus one access key | The key is allowed on its own bucket only |
+| `storage` (local) | One directory | Paths are cleaned and must stay inside the directory; only the API touches the disk |
 
-**Postgres specifics**
+**Postgres host specifics**
 
-- Put PgBouncer in front in transaction mode for the pooled port. Offer a direct, low-limit port for migrations and anything needing session features.
-- PgBouncer authenticates tenants through `auth_query` against a function on the host, so new roles work without editing config files.
-- Set per-role `CONNECTION LIMIT`, `statement_timeout`, `idle_in_transaction_session_timeout` and `work_mem`.
-- Allowlist extensions (`pgcrypto`, `uuid-ossp`, `pg_trgm`, `vector`). Do not allow `dblink`, `file_fdw`, `postgres_fdw` or untrusted procedural languages.
+- When a host is registered, the worker revokes `CONNECT` from `PUBLIC` on every existing database (`postgres`, `template1`), so tenant roles can reach only their own database.
+- Per-role `CONNECTION LIMIT`, `statement_timeout`, `idle_in_transaction_session_timeout` and `work_mem`.
+- Extensions allowlist: `pgcrypto`, `uuid-ossp`, `pg_trgm`, `vector`. Never `dblink`, `file_fdw`, `postgres_fdw` or untrusted languages.
 - Never grant `pg_read_server_files`, `pg_write_server_files` or `pg_execute_server_program`.
+- PgBouncer in transaction mode for the pooled port when configured on the host; `auth_query` so new roles work without config edits.
+- The project API runs every statement as the service's own role, never as an admin role, so its limits and isolation are the same as a native connection.
 
-**Redis specifics.** Sharing one Redis process gives weak isolation for memory: one tenant filling memory triggers eviction for everyone, and per-prefix memory has to be estimated by sampling. The default is shared with ACL plus prefix. A small Redis or Valkey process per resource is the main alternative and is listed in the open questions. Keep the driver swappable so only it changes if that decision flips.
+**Vector specifics.** When the host has the `vector` extension, collections use a `vector(n)` column and an HNSW index. When it does not (for example a development Postgres), the driver falls back to a `real[]` column and exact search in SQL. The API is the same either way.
 
-**Object storage specifics.** The bundled engine is Garage, a lightweight S3-compatible store. Garage buckets and keys are cheap, and Garage permissions are granted per key per bucket, so each resource gets its own bucket (`sb-<resource_id>`, built from the immutable resource id) and its own access key allowed on that bucket only. The worker manages both through Garage's admin API. Backups live in a separate private bucket that no tenant key is ever allowed on.
+**Queue specifics.** Each queue is a row in the service's `queues` table, and messages live in its `messages` table. Receiving uses `FOR UPDATE SKIP LOCKED` and sets a visibility timeout. A message received more than `max_receives` times moves to the dead-letter state.
 
-Tenants reach their bucket in two ways:
+**Auth specifics.** End users, refresh tokens and settings live in the service's own database. Passwords are argon2id. Access tokens are HS256 JWTs signed with the service's secret, valid for one hour by default; refresh tokens are random, stored hashed, and rotate on every use. The JWT secret is shown to the owner so their own server can verify tokens.
 
-1. **Native S3** with their own long-lived access key, through `s3.<domain>` with path-style addressing, from any S3 client or tool (`aws s3`, `rclone`, the AWS SDKs). Rotation creates a new key, allows it on the bucket, and removes the old one after the grace period.
-2. **The data API and presigned URLs**, signed by the API with the resource's own key, so serverless and browser uploads work without exposing the key.
+**Storage specifics.** Two backends, chosen per storage host:
 
-Garage enforces the storage limit itself through bucket quotas (maximum size and object count), so writes past the limit are refused by the engine, not by Sparkbase. Pausing or suspending a resource removes its key's permission on the bucket; resuming grants it again.
+1. **Garage** (Docker install default): one bucket `sb-<resource_id>` and one access key per service, managed through Garage's admin API. Native S3 at `s3.<domain>` with path-style addressing, and presigned URLs signed with SigV4. Quotas are Garage bucket quotas.
+2. **Local** (development and single-disk installs): one directory per service under the host's root. The project API reads and writes objects, and signed URLs are HMAC-signed API URLs. The quota is checked by the API before each write.
 
-Garage has no prefix-scoped keys or temporary credentials, which is why the isolation unit is a bucket. Support for external S3 services (R2, AWS S3, Backblaze B2), which would need a shared-bucket, prefix-per-resource model with temporary credentials, is deferred until after the first release.
-
-**Limit enforcement.** Each limit has a mechanism, a check frequency and a defined action. Limits protect the host, not a revenue model.
+**Limit enforcement**
 
 | Limit | Mechanism | Checked | Action on breach |
 | --- | --- | --- | --- |
-| Postgres storage | `pg_database_size()` sampled by a worker job | Every 5 min | Warn at 80% and 90%; at 100% set `default_transaction_read_only = on` for the role |
-| Postgres direct connections | Role `CONNECTION LIMIT` | Hard | New connections refused |
-| Postgres pooled connections | PgBouncer per-database `pool_size` and `max_db_connections` | Hard | Clients wait, then time out |
+| Postgres, vector, queue, auth storage | `pg_database_size()` sampled | Every 5 min | Warn at 80% and 90%; at 100% set `default_transaction_read_only = on` for the role |
+| Direct connections | Role `CONNECTION LIMIT` | Hard | New connections refused |
 | Query time | Role `statement_timeout` | Hard | Query cancelled |
-| Redis memory | Sampled key scan with `MEMORY USAGE` | Every 1 min | Switch ACL user to read and delete only until under limit |
-| Redis clients | `CLIENT LIST` by user | Every 1 min | Kill excess clients |
-| Object storage bytes and objects | Garage bucket quota, plus bucket size sampled through the admin API for usage graphs | Hard (sampled every 5 min) | Writes refused by Garage |
-| Data API requests | Counters in Redis per resource | Rolling month | Deny with `quota_exceeded` |
+| Cache memory | Sampled key scan with `MEMORY USAGE` | Every 1 min | ACL user switched to read and delete only |
+| Cache clients | `CLIENT LIST` by user | Every 1 min | Excess clients killed |
+| Storage bytes | Garage bucket quota, or API check (local) | Hard | Writes refused |
+| Project API requests | Counters in Redis per service | Rolling month | `quota_exceeded` |
+| Auth users | Count of users | On signup | `quota_exceeded` |
 
-Every breach writes an `audit_log` row, notifies the owner (email when SMTP is configured, always a dashboard banner), and clears automatically once usage drops or the admin moves the resource to a larger plan.
+Every breach writes an `audit_log` row and a notification for the owner, and clears once usage drops or the plan changes.
 
-**Pausing.** Owners and admins can pause a resource: the Postgres role is set to `NOLOGIN` and its connections terminated, the Redis ACL user is disabled, the storage key loses its permission on the bucket, and the Traefik router is removed. Resuming takes seconds. Automatic pausing of idle resources is an optional admin setting, off by default.
+**Pausing.** Postgres-family roles get `NOLOGIN` and connections are terminated, the cache ACL user is disabled, the storage key loses its bucket permission (or the API refuses the directory), and the Traefik router is removed. Project API calls return `resource_not_ready`.
 
 ## Control plane data model
 
-The control plane keeps its own metadata in a dedicated Postgres database, separate from every tenant host. The schema below is the first migration (`0001_init.sql`). Credentials are stored encrypted, usage samples are append-only, and background work runs from a `jobs` table using `FOR UPDATE SKIP LOCKED`, so self-hosters need no extra queue software.
+The control plane keeps its metadata in a dedicated Postgres database, separate from every tenant host. Migrations are numbered `.sql` files embedded in the binary.
 
 ```sql
 create extension if not exists pgcrypto;
@@ -209,10 +234,9 @@ create extension if not exists pgcrypto;
 create table users (
   id                uuid primary key default gen_random_uuid(),
   email             text not null unique,
-  password_hash     text not null,             -- argon2id
+  password_hash     text not null,
   name              text,
-  role              text not null default 'member'
-                    check (role in ('admin','member')),
+  role              text not null default 'member' check (role in ('admin','member')),
   email_verified_at timestamptz,
   failed_logins     int not null default 0,
   locked_until      timestamptz,
@@ -221,28 +245,28 @@ create table users (
 );
 
 create table sessions (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references users(id) on delete cascade,
-  token_hash   text not null unique,           -- sha256 of the cookie value
-  expires_at   timestamptz not null,
-  created_at   timestamptz not null default now()
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references users(id) on delete cascade,
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
 );
 
-create table auth_tokens (                     -- email verification, password reset, invites
-  id          uuid primary key default gen_random_uuid(),
-  kind        text not null check (kind in ('verify_email','password_reset','invite')),
-  user_id     uuid references users(id) on delete cascade,  -- null for invites
-  email       text not null,
-  token_hash  text not null unique,
-  role        text check (role in ('admin','member')),     -- invites only
-  invited_by  uuid references users(id) on delete set null,
-  expires_at  timestamptz not null,
-  used_at     timestamptz,
-  created_at  timestamptz not null default now()
+create table auth_tokens (           -- setup, email verification, password reset, invites
+  id         uuid primary key default gen_random_uuid(),
+  kind       text not null check (kind in ('setup','verify_email','password_reset','invite')),
+  user_id    uuid references users(id) on delete cascade,
+  email      text,
+  token_hash text not null unique,
+  role       text check (role in ('admin','member')),
+  invited_by uuid references users(id) on delete set null,
+  expires_at timestamptz not null,
+  used_at    timestamptz,
+  created_at timestamptz not null default now()
 );
 
-create table settings (                        -- install-wide, edited by admins
-  key        text primary key,                 -- 'signup_mode', 'auto_pause_days', ...
+create table settings (
+  key        text primary key,
   value      jsonb not null,
   updated_at timestamptz not null default now()
 );
@@ -250,661 +274,442 @@ create table settings (                        -- install-wide, edited by admins
 create table projects (
   id         uuid primary key default gen_random_uuid(),
   owner_id   uuid not null references users(id) on delete cascade,
-  slug       text not null unique,             -- short id used in hostnames
+  slug       text not null unique,      -- the project ref
   name       text not null,
-  status     text not null default 'active'
-             check (status in ('active','suspended','deleting')),
+  status     text not null default 'active' check (status in ('active','suspended','deleting')),
   created_at timestamptz not null default now()
 );
 
+create table project_keys (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references projects(id) on delete cascade,
+  kind        text not null check (kind in ('publishable','secret')),
+  prefix      text not null,
+  key_hash    text not null unique,
+  key_enc     bytea not null,
+  created_at  timestamptz not null default now(),
+  revoked_at  timestamptz
+);
+
 create table hosts (
-  id              uuid primary key default gen_random_uuid(),
-  kind            text not null check (kind in ('postgres','cache','storage')),
-  name            text not null unique,
-  internal_addr   text not null,               -- admin target; for storage, the S3 endpoint
-  config          jsonb not null default '{}', -- per-kind settings, e.g. bucket names, pooler addr
-  admin_secret_enc bytea not null,             -- AES-256-GCM
-  weight          int  not null default 100,   -- relative capacity
-  status          text not null default 'active'
-                  check (status in ('active','draining','offline')),
-  created_at      timestamptz not null default now()
+  id               uuid primary key default gen_random_uuid(),
+  kind             text not null check (kind in ('postgres','cache','storage')),
+  name             text not null unique,
+  internal_addr    text not null,
+  config           jsonb not null default '{}',
+  admin_secret_enc bytea not null,
+  weight           int not null default 100,
+  status           text not null default 'active' check (status in ('active','draining','offline')),
+  created_at       timestamptz not null default now()
 );
 
 create table plans (
-  id          text primary key,                -- e.g. 'postgres-small'
-  kind        text not null check (kind in ('postgres','cache','storage')),
-  name        text not null,
-  limits      jsonb not null,                  -- {"storage_mb":5120,"direct_connections":10,...}
-  is_default  boolean not null default false,
-  active      boolean not null default true
+  id         text primary key,          -- e.g. 'postgres-small'
+  kind       text not null,
+  name       text not null,
+  limits     jsonb not null,
+  is_default boolean not null default false,
+  active     boolean not null default true
 );
-create unique index plans_one_default_per_kind on plans (kind) where is_default;
 
 create table resources (
   id              uuid primary key default gen_random_uuid(),
   project_id      uuid not null references projects(id) on delete cascade,
-  kind            text not null check (kind in ('postgres','cache','storage')),
+  kind            text not null check (kind in ('postgres','cache','storage','vector','queue','auth')),
   name            text not null,
   plan_id         text not null references plans(id),
   host_id         uuid references hosts(id),
-  status          text not null default 'provisioning'
-                  check (status in ('provisioning','active','paused',
-                                    'suspended','failed','deleting')),
-  external_name   text,                        -- db name, key prefix or bucket name
-  endpoint        text,                        -- stable hostname, e.g. a1b2c3.db.example.com
-  provision_state jsonb not null default '{}', -- completed steps, so retries resume
+  status          text not null default 'provisioning',
+  external_name   text,                 -- db name, key prefix, bucket or directory
+  endpoint        text,
+  provision_state jsonb not null default '{}',
   write_locked    boolean not null default false,
+  last_error      text,
   last_active_at  timestamptz,
   created_at      timestamptz not null default now(),
   unique (project_id, name)
 );
-create index resources_host_idx on resources (host_id);
 
 create table resource_credentials (
   id          uuid primary key default gen_random_uuid(),
   resource_id uuid not null references resources(id) on delete cascade,
   username    text not null,
-  secret_enc  bytea not null,                  -- AES-256-GCM, key from env
+  secret_enc  bytea not null,
+  extra_enc   bytea,                     -- e.g. the auth JWT secret
   created_at  timestamptz not null default now(),
-  revoke_at   timestamptz,                     -- end of the rotation grace period
+  revoke_at   timestamptz,
   revoked_at  timestamptz
 );
 
-create table api_keys (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references users(id) on delete cascade,
-  project_id   uuid references projects(id) on delete cascade, -- null = account-wide
-  name         text not null,
-  prefix       text not null,                  -- first 8 chars, shown in UI
-  key_hash     text not null unique,           -- sha256 of the full key
-  scopes       text[] not null default '{}',
-  last_used_at timestamptz,
-  expires_at   timestamptz,
-  revoked_at   timestamptz,
-  created_at   timestamptz not null default now()
-);
-
-create table idempotency_keys (
-  user_id     uuid not null references users(id) on delete cascade,
-  key         text not null,
-  request_hash text not null,
-  status_code int,
-  response    jsonb,
-  created_at  timestamptz not null default now(),
-  primary key (user_id, key)
-);
-
-create table usage_samples (
-  resource_id uuid not null references resources(id) on delete cascade,
-  metric      text not null,                   -- 'storage_bytes','connections',...
-  sampled_at  timestamptz not null,
-  value       bigint not null,
-  primary key (resource_id, metric, sampled_at)
-);
-
-create table backups (
-  id          uuid primary key default gen_random_uuid(),
-  resource_id uuid not null references resources(id) on delete cascade,
-  status      text not null default 'running'
-              check (status in ('running','done','failed')),
-  object_key  text,                            -- in the private backups bucket
-  size_bytes  bigint,
-  checksum    text,
-  expires_at  timestamptz,
-  error       text,
-  created_at  timestamptz not null default now(),
-  finished_at timestamptz
-);
-
-create table jobs (
-  id           bigserial primary key,
-  type         text not null,                  -- 'provision_resource', ...
-  payload      jsonb not null,
-  status       text not null default 'queued'
-               check (status in ('queued','running','done','failed')),
-  run_at       timestamptz not null default now(),
-  attempts     int not null default 0,
-  max_attempts int not null default 5,
-  locked_at    timestamptz,
-  last_error   text,
-  created_at   timestamptz not null default now()
-);
-create index jobs_ready_idx on jobs (run_at) where status = 'queued';
-
-create table audit_log (
-  id          bigserial primary key,
-  actor_id    uuid,
-  project_id  uuid,
-  resource_id uuid,
-  action      text not null,                   -- 'resource.create', 'limit.breach', ...
-  detail      jsonb,
-  created_at  timestamptz not null default now()
-);
+-- api_keys, usage_samples, backups, jobs, audit_log and notifications
+-- are in the migration file.
 ```
 
-**Notes**
+The full schema lives in `server/internal/db/migrations/0001_init.sql`.
 
-- A worker claims a job with `update jobs set status='running', locked_at=now(), attempts=attempts+1 where id = (select id from jobs where status='queued' and run_at <= now() order by run_at for update skip locked limit 1) returning *`. Jobs stuck in `running` past a timeout are re-queued.
-- Host choice is a query over `resources` grouped by `host_id`, weighted by `hosts.weight`, filtered to `status = 'active'`.
-- For storage, a `hosts` row represents a Garage cluster (S3 endpoint and the backups bucket name in `config`, the encrypted admin API token in `admin_secret_enc`). Each resource's `external_name` holds its bucket name, and its access key id and encrypted secret live in `resource_credentials`.
-- Resource kinds are `postgres`, `cache` and `storage` everywhere: in the API, plans, hosts and drivers.
+**Host kinds and service kinds.** `postgres`, `vector`, `queue` and `auth` services all live on `postgres` hosts. `cache` services live on `cache` hosts and `storage` services on `storage` hosts.
 
 ## Backend plan
 
-The backend is a TypeScript monorepo on Node (current LTS) with two processes sharing one core library: an HTTP API built on Hono, and a worker that does everything slow or scheduled. All SQL is hand-written. There is no ORM and no query builder.
+The backend is one Go module. One binary, `sparkbase-server`, runs the API, the worker, or both. The CLI, `sparkbase`, is a second binary in the same module. All SQL is hand-written. There is no ORM and no query builder.
 
 **Stack**
 
 | Concern | Choice | Why |
 | --- | --- | --- |
-| Runtime and language | Node LTS, TypeScript (strict) | Types catch shape errors without an ORM |
-| HTTP | Hono with `@hono/node-server` | Small, fast, typed routes |
-| Postgres driver | `postgres` (postgres.js) | Tagged-template SQL, automatic parameterization |
-| Redis driver | `ioredis` | Mature, supports ACL commands |
-| Validation | Zod via `@hono/zod-validator` | Request and response shapes in one place |
-| Migrations | Numbered `.sql` files plus a small runner | Forward-only, no framework to learn |
-| Passwords and keys | argon2id; SHA-256 for API keys and tokens | API keys are high-entropy, so a fast hash is fine |
-| Logging and metrics | pino, `prom-client` | Structured logs and Prometheus metrics |
-| Tests | Vitest plus real Postgres, Redis and Garage in containers | Mocks hide the bugs that matter here |
-| Object storage | Garage admin API over `fetch`; AWS SDK v3 S3 client for data access and presigning | No extra admin library |
-| Edge proxy | Traefik v3 | TCP routing by SNI, ACME, HTTP provider for dynamic config |
-| Dashboard | Next.js (App Router) on the public API only | One UI for members and admins |
+| Language | Go (current release) | One static binary, strong standard library |
+| HTTP | `net/http` with method and path patterns | No framework needed |
+| Postgres driver | `jackc/pgx/v5` | Fast, typed, parameterized |
+| Redis driver | `redis/go-redis/v9` | Mature, supports ACL commands |
+| Validation | Small typed request structs with explicit checks | No reflection magic |
+| Migrations | Embedded numbered `.sql` files plus a small runner | Forward-only |
+| Passwords and keys | argon2id (`x/crypto`); SHA-256 for keys and tokens | Keys are high-entropy |
+| Logging and metrics | `log/slog` JSON; Prometheus text format | Standard library first |
+| Tests | `go test` against real Postgres and Redis | Mocks hide the bugs that matter |
+| Dashboard | Next.js (App Router) on Bun | Same stack as the landing page |
+| SDK | TypeScript, built with Bun, zero dependencies | Runs in Node, Bun, Deno, browsers and edge |
 
 **Repository layout**
 
 ```text
 sparkbase/
-  apps/
-    api/          Hono app: routes, auth middleware, rate limits, Traefik config endpoint
-    worker/       job loop: provisioning, limits, backups, email
-    dashboard/    web UI on the public API
-  packages/
-    core/         domain logic; no HTTP, no SQL strings
-    db/           migrations/*.sql, queries/*.ts, migration runner
-    drivers/      postgres.ts, cache.ts, storage.ts
-    sdk/          @sparkbase/sdk
-    cli/          sparkbase command line, including admin commands
-  deploy/
-    docker-compose.yml       single-host install with Traefik
-    traefik/                 static config, entrypoints, cert resolvers
-    hosts/                   bootstrap for extra data hosts
-  docs/
+  server/
+    cmd/sparkbase-server/   api + worker binary
+    cmd/sparkbase/          CLI
+    internal/
+      config/  logx/  crypto/  db/ (migrations, queries)  httpx/
+      api/     (management API, project API, Traefik config)
+      worker/  (job loop and handlers)
+      drivers/ (postgres, cache, storage, vector, queue, auth)
+      core/    (domain rules: plans, limits, scheduler, keys)
+      testenv/ (helpers for integration tests)
+  web/dashboard/   Next.js on Bun
+  sdk/js/          @sparkbase/sdk
+  deploy/          compose files, Traefik config (later)
+  scripts/         dev-services.sh and helpers
+  waitlist/        landing page (separate app)
+  DECISIONS.md
 ```
 
-**Data access without an ORM.** Each query is a small exported function that owns its SQL and returns a typed row. Callers never see SQL strings.
+**The driver contract.** Every service kind implements one interface. The API and worker only talk to this interface.
 
-```ts
-// packages/db/queries/resources.ts
-import { sql } from '../client'
-
-export async function getResource(id: string) {
-  const [row] = await sql<ResourceRow[]>`
-    select r.*, p.limits
-    from resources r join plans p on p.id = r.plan_id
-    where r.id = ${id}`
-  return row ?? null
+```go
+type Driver interface {
+    Kind() string
+    Provision(ctx context.Context, r *Resource, h *Host, limits Limits) (*Provisioned, error)
+    Deprovision(ctx context.Context, r *Resource, h *Host) error
+    Pause(ctx context.Context, r *Resource, h *Host) error
+    Resume(ctx context.Context, r *Resource, h *Host) error
+    RotateCredentials(ctx context.Context, r *Resource, h *Host) (*Credentials, error)
+    ApplyLimits(ctx context.Context, r *Resource, h *Host, limits Limits) error
+    MeasureUsage(ctx context.Context, r *Resource, h *Host) (Usage, error)
+    SetWriteLock(ctx context.Context, r *Resource, h *Host, locked bool) error
 }
 ```
 
-**The driver contract.** Every resource kind implements one interface. The API and worker only ever talk to this interface.
+`postgres`, `vector`, `queue` and `auth` share one Postgres-family implementation for provisioning, and each adds its own schema setup and project API handlers.
 
-```ts
-interface ResourceDriver {
-  kind: 'postgres' | 'cache' | 'storage'
-  provision(input: ProvisionInput): Promise<ProvisionResult>
-  deprovision(r: Resource): Promise<void>
-  pause(r: Resource): Promise<void>
-  resume(r: Resource): Promise<void>
-  rotateCredentials(r: Resource): Promise<Credentials>
-  applyLimits(r: Resource, limits: PlanLimits): Promise<void>
-  measureUsage(r: Resource): Promise<Usage>
-  setWriteLock(r: Resource, locked: boolean): Promise<void>
-}
-```
-
-**Provisioning a Postgres resource.** The API inserts a `resources` row in `provisioning` and enqueues a job. The worker then runs these steps, each idempotent and recorded in `provision_state`, so a crash or retry never creates duplicates:
+**Provisioning a Postgres-family service.** Each step is idempotent and recorded in `provision_state`:
 
 1. Pick the least-loaded active Postgres host.
-2. Generate a role name and a random password; `CREATE ROLE ... LOGIN CONNECTION LIMIT n`.
-3. `CREATE DATABASE ... OWNER role` (outside a transaction), then `REVOKE ALL ON DATABASE ... FROM PUBLIC`.
-4. Apply per-role settings: `statement_timeout`, `idle_in_transaction_session_timeout`, `work_mem`.
-5. Enable allowlisted extensions requested by the plan.
-6. Set the PgBouncer per-database pool limits and set `endpoint` to `<slug>.db.<domain>`, so the Traefik config endpoint starts routing it.
-7. Store the encrypted password, set `status = 'active'`, write an audit row.
+2. Generate a role name and random password; `CREATE ROLE ... LOGIN CONNECTION LIMIT n`.
+3. `CREATE DATABASE ... OWNER role`, then `REVOKE ALL ON DATABASE ... FROM PUBLIC`.
+4. Apply per-role settings.
+5. Kind setup: extensions (`postgres`), collections table (`vector`), queue tables (`queue`), auth tables and a JWT secret (`auth`), run as the service role.
+6. Set `endpoint` and store the encrypted credentials.
+7. Set `status = 'active'` and write an audit row.
 
 **Background jobs**
 
 | Job | Trigger | Does |
 | --- | --- | --- |
 | `provision_resource`, `deprovision_resource` | API call | Create or tear down on a host |
-| `sample_usage` | Every minute (Postgres and storage every 5 min) | Calls `measureUsage` on active resources, inserts samples |
-| `enforce_limits` | After each sample run | Warns, locks or unlocks writes by plan limits |
-| `pause_inactive` | Hourly, only when the admin enables auto-pause | Pauses idle resources and notifies owners |
-| `backup_resource` | Nightly | Per-database dump to the private backups bucket |
-| `verify_backups` | Weekly | Restores a random backup into a scratch database and checks it |
-| `move_resource` | Admin action | Copy to another host, switch routing, retire old copy |
-| `send_email` | Any | Invites, limit warnings, pause notices (only when SMTP is configured) |
+| `delete_project` | API call | Deprovision every service, then delete the project |
+| `rotate_credentials` | API call | New credentials, old ones revoked after the grace period |
+| `sample_usage` | Every minute | `MeasureUsage` on active services, inserts samples |
+| `enforce_limits` | After sampling | Warns, locks or unlocks writes |
+| `revoke_expired_credentials` | Every minute | Drops rotated-out credentials after the grace period |
+| `pause_inactive` | Hourly, only when enabled | Pauses idle services |
+| `backup_resource` | Nightly | Per-database dump into backup storage |
+| `send_email` | Any | Invites, resets, limit warnings (only when SMTP is configured) |
 
-**API auth and limits.** Dashboard sessions use httpOnly cookies. Programmatic access uses personal or project-scoped API keys in the form `sb_<random>`, stored as a hash and shown once. Rate limits are sliding windows in Redis, keyed by API key or IP.
-
-**Configuration** is environment variables only, validated at startup:
+**Configuration** (environment variables only, validated at startup)
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `SPARKBASE_DOMAIN` | yes | Base domain, e.g. `example.com` |
+| `SPARKBASE_DOMAIN` | yes | Base domain, e.g. `example.com`; `localhost` in development |
+| `PUBLIC_API_URL` | no | Defaults to `https://api.<domain>`; project URLs are built from it |
 | `DATABASE_URL` | yes | Control-plane Postgres |
 | `REDIS_URL` | yes | Control-plane Redis |
-| `ENCRYPTION_KEY` | yes | 32 bytes, base64. Encrypts stored credentials |
-| `TRAEFIK_CONFIG_TOKEN` | yes | Shared secret for the Traefik HTTP provider endpoint |
-| `ACME_EMAIL` | with ACME | Let's Encrypt account email |
-| `TLS_MODE` | no | `acme-dns` (default), `acme-http` or `custom` |
-| `SMTP_URL` | no | Without it, invite and reset links are shown to the admin and emails are logged |
+| `ENCRYPTION_KEY` | yes | 32 bytes, base64 |
+| `TRAEFIK_CONFIG_TOKEN` | yes | Shared secret for the Traefik config endpoint |
+| `PORT` | no | API port, default `8787` |
+| `NATIVE_MODE` | no | `traefik` (default) or `direct` |
+| `BOOTSTRAP_PG_HOST`, `BOOTSTRAP_CACHE_HOST`, `BOOTSTRAP_STORAGE` | no | Bundled data hosts registered on first start |
+| `SMTP_URL` | no | Without it, emails are logged and links are shown to the admin |
 
-Per-host settings live in the `hosts` table. The bundled data hosts are registered automatically on first start from their compose service addresses, so a single-host install needs no `host add`.
-
-**Testing.** Unit tests for `core` with no I/O. Integration tests run the API against real Postgres, Redis and Garage containers. Each driver has a contract test suite run against the real engine, covering provision, isolation (tenant A cannot reach tenant B), limits enforced, pause and resume, and deprovision. An end-to-end suite runs the full compose stack with Traefik and connects through it with real clients. The isolation tests are the most important tests in the repository.
+**Testing.** Unit tests for pure logic. Integration tests run the API and worker against a real control Postgres, a real Postgres data host and a real Redis, started locally by `scripts/dev-services.sh` (no Docker needed). Every driver has a contract test covering provision, isolation (tenant A cannot reach tenant B), limits, pause and resume, and deprovision. The isolation tests are the most important tests in the repository.
 
 ## API reference
 
-The API has two layers. The **management API** creates and configures projects and resources. The **data API** gives HTTP access to the resources themselves, for serverless and edge runtimes where a raw TCP connection is awkward. Anything the data API can do, a native driver can do too.
+Two layers: the **management API** at `/v1` creates and configures projects and services; the **project API** at `/p/{ref}` is what apps call.
 
 **Conventions**
 
-- Base URL `https://api.<domain>/v1`. JSON in and out. IDs are UUIDs.
-- Auth: `Authorization: Bearer sb_...` (API key) or a dashboard session cookie.
-- List endpoints use cursor pagination: `?limit=50&cursor=...`.
-- `POST` creates accept an `Idempotency-Key` header.
-- Errors share one shape: `{ "error": { "code": "quota_exceeded", "message": "...", "details": {} } }`.
-- Rate limit headers on every response: `X-RateLimit-Limit`, `-Remaining`, `-Reset`.
+- JSON in and out. IDs are UUIDs.
+- Management auth: session cookie or `Authorization: Bearer sb_...` account key.
+- Project auth: `apikey` header with a project key, plus an optional end-user `Authorization: Bearer <jwt>`.
+- Errors: `{ "error": { "code": "quota_exceeded", "message": "...", "details": {} } }`.
+- Rate limit headers: `X-RateLimit-Limit`, `-Remaining`, `-Reset`.
 
 **Setup, account and keys**
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/setup` | Whether first-run setup is still open |
-| POST | `/setup` | Create the first admin; needs the setup token printed in the API logs; closes once any user exists |
-| POST | `/auth/signup` | Accept an invite (token + password), or sign up when open signup is on |
-| POST | `/auth/login` | Start a session |
-| POST | `/auth/logout` | End the session |
-| POST | `/auth/verify-email` | Confirm the emailed token |
-| POST | `/auth/password/reset` | Request or complete a password reset |
-| GET | `/me` | Current user |
-| PATCH | `/me` | Update name, email, password |
-| GET | `/api-keys` | List keys (prefix only, never the secret) |
-| POST | `/api-keys` | Create a key, optionally scoped to one project; secret returned once |
-| DELETE | `/api-keys/{id}` | Revoke a key |
+| GET | `/v1/setup` | Whether first-run setup is still open |
+| POST | `/v1/setup` | Create the first admin with the setup token from the logs |
+| POST | `/v1/auth/signup` | Accept an invite, or sign up when open signup is on |
+| POST | `/v1/auth/login` | Start a session |
+| POST | `/v1/auth/logout` | End the session |
+| POST | `/v1/auth/verify-email` | Confirm the emailed token |
+| POST | `/v1/auth/password/reset` | Request (`email`) or complete (`token`, `password`) a reset |
+| GET/PATCH | `/v1/me` | Current user; update name or password |
+| GET/POST | `/v1/api-keys` | List or create account keys (secret returned once) |
+| DELETE | `/v1/api-keys/{id}` | Revoke |
 
-**Admin** (role `admin` only)
+**Admin** (role `admin`)
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/admin/users` | List users |
-| POST | `/admin/invites` | Invite by email with a role; returns the invite link |
-| DELETE | `/admin/invites/{id}` | Cancel an invite |
-| PATCH | `/admin/users/{id}` | Change role, disable or enable |
-| GET | `/admin/settings` | Install settings |
-| PATCH | `/admin/settings` | Signup mode, auto-pause, per-user resource cap |
-| GET/POST/PATCH | `/admin/plans`, `/admin/plans/{id}` | Manage plans and their limits |
-| GET/POST/PATCH | `/admin/hosts`, `/admin/hosts/{id}` | Register, drain or take hosts offline |
-| POST | `/admin/resources/{id}/suspend` | Suspend any resource |
-| POST | `/admin/resources/{id}/unsuspend` | Lift a suspension |
-| POST | `/admin/resources/{id}/move` | Move a resource to another host |
+| GET | `/v1/admin/users` | List users and pending invites |
+| POST | `/v1/admin/invites` | Invite by email with a role; returns the link |
+| DELETE | `/v1/admin/invites/{id}` | Cancel an invite |
+| PATCH | `/v1/admin/users/{id}` | Change role, disable or enable |
+| GET/PATCH | `/v1/admin/settings` | Signup mode, auto-pause, resource cap, member plan changes |
+| GET/POST/PATCH | `/v1/admin/plans`, `/v1/admin/plans/{id}` | Manage plans |
+| GET/POST/PATCH | `/v1/admin/hosts`, `/v1/admin/hosts/{id}` | Register, drain or take hosts offline |
+| POST | `/v1/admin/resources/{id}/suspend`, `/unsuspend` | Suspend or lift |
+| GET | `/v1/admin/audit` | Audit log |
+| GET | `/v1/admin/jobs` | Recent and failed jobs |
 
-**Projects**
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/projects` | List your projects |
-| POST | `/projects` | Create a project (`name`, optional `slug`) |
-| GET | `/projects/{projectId}` | Project detail with resource summary |
-| PATCH | `/projects/{projectId}` | Rename |
-| DELETE | `/projects/{projectId}` | Delete the project and every resource in it (async) |
-
-**Resources**
+**Projects and services**
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/plans?kind=postgres` | Plans and limits for a resource kind |
-| GET | `/projects/{projectId}/resources` | List resources in a project |
-| POST | `/projects/{projectId}/resources` | Create a resource (`kind`, `name`, optional `plan`, else the kind's default); returns `202` with status `provisioning` |
-| GET | `/resources/{id}` | Detail and current status |
-| PATCH | `/resources/{id}` | Rename or change plan (moving to a smaller plan is refused if usage exceeds its limits) |
-| DELETE | `/resources/{id}` | Delete (async) |
-| POST | `/resources/{id}/pause` | Pause |
-| POST | `/resources/{id}/resume` | Resume |
-| GET | `/resources/{id}/connection` | Connection string and parts (host, port, user, password, database) |
-| POST | `/resources/{id}/credentials/rotate` | Issue new credentials; old ones revoked after a grace period |
-| GET | `/resources/{id}/usage?from=&to=&metric=` | Usage samples against plan limits |
-| GET | `/resources/{id}/backups` | List backups |
-| POST | `/resources/{id}/backups` | Take a backup now |
-| POST | `/resources/{id}/backups/{backupId}/restore` | Restore (to the same or a new resource) |
+| GET/POST | `/v1/projects` | List or create (`name`, optional `slug`) |
+| GET/PATCH/DELETE | `/v1/projects/{id}` | Detail (with URL), rename, delete (async) |
+| GET | `/v1/projects/{id}/keys` | Project URL and keys (publishable and secret) |
+| POST | `/v1/projects/{id}/keys/rotate` | Rotate one key kind |
+| GET | `/v1/plans?kind=` | Plans |
+| GET/POST | `/v1/projects/{id}/resources` | List or add a service (`kind`, `name`, optional `plan`); add returns `202` |
+| GET/PATCH/DELETE | `/v1/resources/{id}` | Detail, rename or change plan, delete |
+| POST | `/v1/resources/{id}/pause`, `/resume`, `/retry` | Lifecycle |
+| GET | `/v1/resources/{id}/connection` | Native connection details and the service's project API path |
+| POST | `/v1/resources/{id}/credentials/rotate` | New credentials with a grace period |
+| GET | `/v1/resources/{id}/usage` | Latest usage against limits, and samples |
+| GET/POST | `/v1/resources/{id}/backups` | List or take backups (`postgres`-family) |
+| GET | `/v1/notifications` | Limit warnings and pauses for the current user |
 
-Whether members may change their own resources' plans is an admin setting. When it is off, only admins can change plans.
+**Project API** (base: the project URL)
 
-**Data API: Postgres**
+| Method | Path | Key | Purpose |
+| --- | --- | --- | --- |
+| GET | `/` | any | Project info and list of services |
+| POST | `/postgres/{name}/query` | secret | `{ "sql", "params" }`, one statement |
+| POST | `/postgres/{name}/transaction` | secret | `{ "statements": [{sql, params}] }`, atomic |
+| GET | `/postgres/{name}/schema` | secret | Tables, columns |
+| GET/PUT/DELETE | `/cache/{name}/keys/{key}` | secret | Read; write (`{ value, ttl }`); delete |
+| POST | `/cache/{name}/batch` | secret | Several get, set, delete operations |
+| GET | `/storage/{name}/objects?prefix=` | secret | List objects |
+| PUT/GET/DELETE | `/storage/{name}/objects/{key...}` | secret | Upload (body), download, delete |
+| POST | `/storage/{name}/sign` | secret | `{ key, method, expiresIn }` → signed URL |
+| GET/PUT | `/storage/{name}/signed/{key...}?…` | none | Use a signed URL (local backend) |
+| GET/POST | `/vector/{name}/collections` | secret | List, create (`name`, `dimension`, `metric`) |
+| DELETE | `/vector/{name}/collections/{c}` | secret | Drop a collection |
+| POST | `/vector/{name}/collections/{c}/upsert` | secret | `{ items: [{id, vector, metadata}] }` |
+| POST | `/vector/{name}/collections/{c}/query` | secret | `{ vector, topK, filter }` → nearest items |
+| POST | `/vector/{name}/collections/{c}/delete` | secret | `{ ids }` |
+| GET/POST | `/queue/{name}/queues` | secret | List, create (`name`, `visibilityTimeout`, `maxReceives`) |
+| DELETE | `/queue/{name}/queues/{q}` | secret | Drop a queue |
+| POST | `/queue/{name}/queues/{q}/send` | secret | `{ messages: [{ body, delay }] }` |
+| POST | `/queue/{name}/queues/{q}/receive` | secret | `{ max, visibilityTimeout }` |
+| POST | `/queue/{name}/queues/{q}/ack`, `/nack` | secret | `{ ids }` (nack: optional `delay`) |
+| GET | `/queue/{name}/queues/{q}/stats` | secret | Ready, in flight, dead counts |
+| POST | `/auth/signup` | publishable | `{ email, password, data }` → session |
+| POST | `/auth/token?grant_type=password\|refresh_token` | publishable | Sign in or refresh → session |
+| POST | `/auth/logout` | publishable + user | Revoke the refresh token family |
+| GET/PUT | `/auth/user` | publishable + user | Current user; update `data` or password |
+| GET/POST | `/auth/admin/users` | secret | List, create users |
+| DELETE | `/auth/admin/users/{id}` | secret | Delete a user |
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| POST | `/resources/{id}/postgres/query` | Run one parameterized statement: `{ "sql": "...", "params": [] }` |
-| POST | `/resources/{id}/postgres/transaction` | Run several statements atomically |
-| GET | `/resources/{id}/postgres/schema` | Tables, columns and indexes |
-
-**Data API: cache**
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/resources/{id}/cache/keys/{key}` | Read a value |
-| PUT | `/resources/{id}/cache/keys/{key}` | Write a value, optional `ttl` seconds |
-| DELETE | `/resources/{id}/cache/keys/{key}` | Delete |
-| POST | `/resources/{id}/cache/batch` | Several get, set or delete operations in one call |
-
-**Data API: object storage**
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/resources/{id}/storage/objects?prefix=` | List objects |
-| POST | `/resources/{id}/storage/presign-upload` | Presigned PUT URL, so files go straight to storage |
-| POST | `/resources/{id}/storage/presign-download` | Presigned GET URL |
-| DELETE | `/resources/{id}/storage/objects/{key}` | Delete an object |
+A session is `{ access_token, token_type: "bearer", expires_in, refresh_token, user }`.
 
 **Operational**
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/health` | Liveness for the API |
-| GET | `/status` | Host health and queue depth (admins see detail, others a summary) |
-| GET | `/internal/traefik/config` | Traefik dynamic config; internal network only, token protected |
-| GET | `/metrics` | Prometheus metrics; internal network only |
-
-**Example: create a resource**
-
-```http
-POST /v1/projects/8f1c.../resources
-Authorization: Bearer sb_...
-Content-Type: application/json
-
-{ "kind": "postgres", "name": "main" }
-```
-
-```json
-{
-  "id": "2b7e...",
-  "kind": "postgres",
-  "name": "main",
-  "plan": "postgres-small",
-  "status": "provisioning",
-  "endpoint": "a1b2c3.db.example.com"
-}
-```
-
-Poll `GET /resources/{id}` until `status` is `active`.
+| GET | `/health` | Liveness |
+| GET | `/v1/status` | Host health and queue depth (admins see detail) |
+| GET | `/internal/traefik/config` | Traefik dynamic config; token protected |
+| GET | `/metrics` | Prometheus metrics; token protected |
 
 **Error codes**
 
 | Code | HTTP | Meaning |
 | --- | --- | --- |
-| `unauthorized` | 401 | Missing or invalid key or session |
-| `forbidden` | 403 | Key scope or role does not cover this project or action |
-| `not_found` | 404 | No such project or resource |
-| `resource_limit_reached` | 403 | The per-user resource cap set by the admin is reached |
-| `quota_exceeded` | 429 | A plan limit (storage, memory, requests) is hit |
-| `resource_not_ready` | 409 | Resource is provisioning, paused or suspended |
-| `plan_change_blocked` | 409 | Usage exceeds the target plan's limits |
+| `unauthorized` | 401 | Missing or invalid key, session or token |
+| `forbidden` | 403 | Key kind, scope or role does not cover this action |
+| `not_found` | 404 | No such project, service or object |
+| `resource_limit_reached` | 403 | The per-user service cap is reached |
+| `quota_exceeded` | 429 | A plan limit is hit |
+| `rate_limited` | 429 | Too many requests |
+| `resource_not_ready` | 409 | Service is provisioning, paused, suspended or failed |
+| `plan_change_blocked` | 409 | Usage exceeds the target plan |
+| `conflict` | 409 | Name taken, or one auth service per project |
 | `setup_closed` | 409 | First-run setup was already completed |
 | `validation_failed` | 422 | Bad request body |
+| `query_failed` | 400 | The database rejected the SQL |
 
 ## SDK, CLI and connection strings
 
-The SDK is a convenience layer on top of native access. It manages resources, wraps the data API, and hands back connection strings for anyone who wants to use their own driver. Because every install has its own URL, the SDK and CLI always take the API base URL.
-
 ```ts
-import { Sparkbase } from '@sparkbase/sdk'
+import { createClient } from '@sparkbase/sdk'
 
-const sb = new Sparkbase({
-  url: 'https://api.example.com',
-  apiKey: process.env.SPARKBASE_API_KEY,
-  project: 'a1b2c3',
-})
+const sb = createClient('https://api.example.com/p/a1b2c3', process.env.SPARKBASE_SECRET_KEY)
 
-// Relational: HTTP query, or the native connection string
-const db = sb.postgres('main')
-const { rows } = await db.query('select * from users where id = $1', [id])
-const url = await db.connectionString({ pooled: true })
+const { rows } = await sb.postgres('main').query('select * from todos where id = $1', [id])
+await sb.cache('sessions').set('user:42', { name: 'Ada' }, { ttl: 60 })
+await sb.storage('uploads').upload('avatars/42.png', file)
+const url = await sb.storage('uploads').signedUrl('avatars/42.png', { expiresIn: 600 })
+await sb.vector('docs').collection('pages').upsert([{ id: 'p1', vector: emb, metadata: { lang: 'en' } }])
+const hits = await sb.vector('docs').collection('pages').query(emb, { topK: 5 })
+await sb.queue('jobs').queue('emails').send({ to: 'ada@example.com' })
+const msgs = await sb.queue('jobs').queue('emails').receive({ max: 10 })
 
-// Cache
-const cache = sb.cache('sessions')
-await cache.set('user:42', { name: 'Ada' }, { ttl: 60 })
-
-// Object storage
-const files = sb.storage('uploads')
-const { url: putUrl } = await files.presignUpload('avatars/42.png')
-
-// Management
-await sb.resources.create({ kind: 'cache', name: 'sessions' })
+// In a browser, with the publishable key
+const client = createClient(projectUrl, 'sbp_...')
+const { session } = await client.auth.signUp({ email, password })
+const { user } = await client.auth.getUser()
 ```
 
-**SDK rules**
-
-- Zero required dependencies in the core package; adapters (for example a `pg` or `ioredis` helper) are optional.
-- Works in Node, Bun, Deno and edge runtimes, since it uses `fetch`.
-- Every method maps one-to-one to a documented endpoint. No hidden behavior.
-- Typed errors that carry the API error `code` (`QuotaExceededError`, `ResourceNotReadyError`).
+**SDK rules.** Zero dependencies, `fetch` only, one method per endpoint, typed errors carrying the API `code`, and the auth client keeps the session in memory (or a storage adapter in browsers) and refreshes it.
 
 **CLI**
 
 | Command | Does |
 | --- | --- |
-| `sparkbase login --url https://api.example.com` | Authenticate against an install and store a key locally |
-| `sparkbase init` | Create or link a project in the current folder |
-| `sparkbase resources add postgres` | Add a resource (`--plan` optional) |
-| `sparkbase resources list` | Show resources and status |
-| `sparkbase env pull` | Write connection strings into `.env` without touching other lines |
-| `sparkbase usage` | Show usage against limits |
-| `sparkbase admin invite <email>` | Admins: invite a user |
-| `sparkbase admin host add --kind postgres` | Admins: register another data host |
+| `sparkbase login --url URL` | Store an account key for an install |
+| `sparkbase projects list` / `create NAME` | Manage projects |
+| `sparkbase link PROJECT_REF` | Link the current folder to a project |
+| `sparkbase services add KIND NAME [--plan]` | Add a service |
+| `sparkbase services list` | Show services and status |
+| `sparkbase env pull` | Write the project URL, keys and native connection strings into `.env` without touching other lines |
+| `sparkbase usage` | Usage against limits |
+| `sparkbase admin invite EMAIL` / `admin users` / `admin hosts` | Admin commands |
 
 **Connection strings**
 
-| Resource | Format |
+| Service | Format |
 | --- | --- |
-| Postgres (pooled, default) | `postgres://sb_x1y2:PASSWORD@a1b2c3.db.example.com:6432/main?sslmode=require` |
-| Postgres (direct, for migrations) | `postgres://sb_x1y2:PASSWORD@a1b2c3.db.example.com:5432/main?sslmode=require` |
-| Cache | `rediss://sb_x1y2:PASSWORD@a1b2c3.cache.example.com:6380` |
-| Object storage | Endpoint `https://s3.example.com`, bucket `sb-2b7e...`, access key id and secret, region `garage`, path-style addressing; or the data API and presigned URLs |
+| Postgres (pooled) | `postgres://ROLE:PASSWORD@main-a1b2c3.db.example.com:6432/DB?sslmode=require` |
+| Postgres (direct) | `postgres://ROLE:PASSWORD@main-a1b2c3.db.example.com:5432/DB?sslmode=require` |
+| Vector | Same as Postgres, with pgvector tables |
+| Cache | `rediss://USER:PASSWORD@sessions-a1b2c3.cache.example.com:6380` (keys must start with the prefix shown) |
+| Storage (Garage) | Endpoint `https://s3.example.com`, bucket, access key, secret, region `garage`, path-style |
+| Queue, Auth | Project API only; auth also shows its JWT secret |
 
-Pooled connections run in transaction mode, so session-level features (advisory locks, `LISTEN/NOTIFY`, some prepared statements) need the direct endpoint, which has a lower connection limit. The docs must say this on the first page a Postgres user reads.
+Pooled connections run in transaction mode, so session features need the direct port.
 
 ## Plans and limits
 
-Plans are named limits presets the admin manages. They carry no prices. A fresh install is seeded with three plans per kind, and one of them is the default for new resources. Admins can edit, add or deactivate plans, and set a per-user cap on the number of resources (default 10, unlimited for admins).
+Plans are named limits presets the admin manages. No prices. Three plans per kind are seeded, Small is the default. Admins set a per-user service cap (default 10, unlimited for admins).
 
-**Postgres (seeded)**
-
-| Limit | Small (default) | Medium | Large |
-| --- | --- | --- | --- |
-| Storage | 1 GB | 10 GB | 50 GB |
-| Pooled connections | 20 | 60 | 200 |
-| Direct connections | 3 | 10 | 25 |
-| Statement timeout | 30 s | 60 s | 300 s |
-| Data API requests per month | 100k | 1M | Unlimited |
-| Backups kept | 3 days | 7 days | 14 days |
-
-**Cache (seeded)**
-
-| Limit | Small (default) | Medium | Large |
-| --- | --- | --- | --- |
-| Memory | 32 MB | 256 MB | 1 GB |
-| Connections | 10 | 50 | 200 |
-| Data API requests per month | 100k | 1M | Unlimited |
-
-**Object storage (seeded)**
-
-| Limit | Small (default) | Medium | Large |
-| --- | --- | --- | --- |
-| Storage | 2 GB | 25 GB | 100 GB |
-| Data API requests per month | 100k | 1M | Unlimited |
-
-Traffic that goes straight to Garage through native S3 or presigned URLs does not pass through Sparkbase, so it is not metered. There is no egress limit for storage.
-
-The seeded numbers are starting points for a small VPS. The docs include a sizing guide that relates host RAM and disk to how many resources of each plan a host can carry.
+| Kind | Limit | Small | Medium | Large |
+| --- | --- | --- | --- | --- |
+| postgres | Storage | 1 GB | 10 GB | 50 GB |
+| postgres | Direct connections | 5 | 15 | 40 |
+| postgres | Statement timeout | 30 s | 60 s | 300 s |
+| cache | Memory | 32 MB | 256 MB | 1 GB |
+| cache | Connections | 10 | 50 | 200 |
+| storage | Storage | 2 GB | 25 GB | 100 GB |
+| storage | Max upload through the API | 50 MB | 200 MB | 1 GB |
+| vector | Storage | 1 GB | 10 GB | 50 GB |
+| vector | Max dimension | 2048 | 4096 | 8192 |
+| queue | Storage | 512 MB | 5 GB | 20 GB |
+| queue | Max message size | 256 KB | 1 MB | 4 MB |
+| auth | Users | 10k | 100k | Unlimited |
+| every kind | Project API requests per month | 100k | 1M | Unlimited |
+| postgres-family | Backups kept | 3 days | 7 days | 14 days |
 
 ## Self-hosting
 
-Self-hosting is the product. The default install is one server running everything; multi-host is the same code with more `hosts` rows.
+Self-hosting is the product. Development needs only Go, Bun, Postgres and Redis installed locally (`scripts/dev-services.sh` starts private instances). The Docker install comes later in the build.
 
-**Single host**
+**Docker install (later stage).** `deploy/docker-compose.yml` with Traefik, the server, the dashboard, control Postgres and Redis, a Postgres data host with PgBouncer and pgvector, a Redis data host and Garage. Only Traefik publishes ports.
 
-```bash
-git clone https://github.com/shellhaki/sparkbase && cd sparkbase/deploy
-cp .env.example .env      # set SPARKBASE_DOMAIN, ACME_EMAIL, DNS provider token
-./generate-secrets.sh     # fills ENCRYPTION_KEY, TRAEFIK_CONFIG_TOKEN, internal passwords
-docker compose up -d
-docker compose logs api | grep "setup token"
-```
+**Bring your own Traefik.** A compose profile without the bundled Traefik, with labels and the HTTP provider endpoint documented.
 
-Then open `https://app.<domain>/setup`, paste the setup token and create the admin account.
+**Multiple hosts.** `POST /v1/admin/hosts` or `sparkbase admin hosts add` registers another data host.
 
-`deploy/docker-compose.yml` starts:
+**Upgrades.** Semantic versions, forward-only migrations run at startup.
 
-| Service | Purpose | Published ports |
-| --- | --- | --- |
-| `traefik` | Edge proxy and certificates | 80, 443, 5432, 6432, 6380 |
-| `api` | Control-plane API; runs migrations at startup | none |
-| `worker` | Background jobs | none |
-| `dashboard` | Web UI | none |
-| `control-db` | Control-plane Postgres | none |
-| `control-redis` | Control-plane Redis | none |
-| `pg-host` + `pgbouncer` | Tenant Postgres and its pooler | none |
-| `cache-host` | Tenant Redis with ACLs | none |
-| `garage` | Object storage | none |
-
-All data lives in named volumes. Internal services sit on a private network that Traefik bridges; data hosts accept connections only from Traefik and the worker.
-
-**Already running Traefik?** Many self-hosters run Traefik already (Coolify, Dokploy, a home lab). The compose file has a profile without the bundled Traefik, plus documented labels and the HTTP provider endpoint to add to an existing Traefik, including the TCP entrypoints it needs.
-
-**Multiple hosts.** `sparkbase admin host add --kind postgres --addr ...` registers another data host prepared with `deploy/hosts/` bootstrap scripts. The scheduler spreads new resources across hosts by weight, and Traefik routes each resource to its host.
-
-**Upgrades.** Semantic versions, Docker images on a public registry, forward-only SQL migrations run at startup, and upgrade notes in every release. `docker compose pull && docker compose up -d` is the upgrade path.
-
-**Backups of the install itself.** The docs cover backing up the control-plane database and `ENCRYPTION_KEY` together, since tenant credentials cannot be decrypted without the key.
+**Backing up the install.** Back up the control database and `ENCRYPTION_KEY` together.
 
 ## Security, backups and operations
 
-A shared-host install is trusted only as far as its isolation holds. Treat a cross-tenant leak as the worst failure the project can have.
-
 **Security baseline**
 
-- TLS everywhere: certificates per hostname or wildcard through Traefik, `sslmode=require` on Postgres, `rediss://` for the cache, HTTPS only for the API, dashboard and S3 endpoint.
-- Credentials encrypted at rest with AES-256-GCM; the key comes from the environment and never sits in the database. API keys, session tokens and passwords are stored only as hashes.
-- Tenant roles are never superusers and cannot create roles or databases. Data hosts accept connections only from Traefik and the worker on the internal network.
-- Credential rotation per resource, with a grace period during which both old and new credentials work.
+- TLS everywhere in production; HTTPS only for the API and dashboard.
+- Credentials encrypted at rest with AES-256-GCM. Account keys, project key hashes, session tokens and passwords are hashed.
+- Tenant roles are never superusers and cannot create roles or databases.
+- The project API runs as the service's own credentials.
+- Credential rotation per service with a grace period.
 - Audit log for every create, delete, rotate, plan change, pause, suspend, invite, role change and limit event.
-- Rate limits on login, signup, setup and every API key. Account lockout after repeated failed logins.
-- First-run setup requires a one-time token from the server logs, so a fresh install exposed to the internet cannot be claimed by someone else.
-- Dependency scanning in CI, a private security contact, and a published disclosure policy.
+- Rate limits on login, signup, setup, end-user auth and every key. Lockout after repeated failed logins.
+- First-run setup needs a one-time token from the server logs.
 
-**Backups**
+**Backups.** Nightly logical dump (`pg_dump`) per Postgres-family service into backup storage, kept by plan, with restore into the same or a new service. The control database is dumped the same way. Weekly automated restore test.
 
-| Resource | Method | Retention | Restore test |
-| --- | --- | --- | --- |
-| Postgres resources | Nightly per-database logical dump, encrypted, to the private backups bucket | By plan | Automated weekly restore of a random backup |
-| Control-plane DB | Nightly dump with the same job | 14 days | Covered by the weekly restore test |
-| Postgres hosts | Optional WAL archiving (WAL-G or pgBackRest) for point-in-time recovery | Operator choice | Documented drill |
-| Cache | None by default; optional RDB snapshot | Latest | On request |
-| Object storage | Garage replication when the operator runs more than one Garage node; otherwise disk-level backups documented | n/a | n/a |
+**Observability.** Prometheus metrics, JSON logs on stdout, `GET /v1/status`, and an admin health page in the dashboard.
 
-Backups can go to an off-site S3-compatible bucket by setting a separate backups backend, which is the recommended setup: a backup on the same disk as the data does not survive that disk.
-
-**Moving a resource between hosts.** The stable hostname makes this routine:
-
-1. Restore a copy on the target host from a fresh dump (or use logical replication for large databases).
-2. Briefly lock writes on the source and apply the final changes.
-3. Verify row counts and a checksum sample.
-4. Switch `host_id`, which changes the Traefik route within seconds, and update the pooler.
-5. Keep the source read-only for a few days, then drop it.
-
-**Observability**
-
-- Metrics (Prometheus, internal endpoint): per-host connections, disk and memory; per-resource usage versus limit; API latency and error rates; job queue depth and failure counts.
-- Logs: structured JSON from the API and worker on stdout, so any Docker log driver works.
-- An optional compose profile adds Prometheus and Grafana with a ready dashboard.
-- The admin dashboard shows host health, queue depth, failed jobs and recent limit breaches.
-
-**Runbooks** in the docs: add a host, drain a host, move a resource, restore a database, restore the whole install, rotate the master encryption key, respond to a suspected cross-tenant incident, and recover from an expired or failed certificate.
+**Runbooks.** Add a host, drain a host, restore a database, restore the install, rotate the encryption key, respond to a suspected cross-tenant incident.
 
 ## Roadmap
 
-Five stages, each ending at a gate with a check you can run. The first gate, isolation, decides whether the rest is worth building.
-
-| Stage | Goal | Gate |
+| Stage | Goal | Check |
 | --- | --- | --- |
-| 0. Foundations | Control plane, accounts, invites, keys, jobs, hosts, isolation harness | Harness exists and can fail |
-| 1. Postgres resource | Native Postgres through Traefik with isolation and limits | Isolation tests green; fresh install to a connection in minutes |
-| 2. Cache, storage, data API, SDK | The other two resources, the HTTP data API, SDK and CLI | Isolation green for all three; SDK and CLI work end to end |
-| 3. Operations | Backups with restore tests, observability, admin tools, security review, runbooks | Restore works; security checklist done |
-| 4. First release | Self-hosting package, docs, release pipeline | Clean server to working resource by following the docs alone |
-| 5. Later | Vector, NoSQL, MySQL, auth, realtime, queues | Each new kind passes the same isolation suite |
+| 0. Foundations | Control plane, setup, accounts, invites, keys, projects with URL and keys, jobs, hosts | Integration tests green |
+| 1. Database | `postgres` service, project API SQL, native string, limits, isolation tests | Isolation tests green |
+| 2. Services | `cache`, `storage`, `vector`, `queue`, `auth`, SDK, CLI | Isolation and SDK tests green for every kind |
+| 3. Operations | Backups, usage and limits, audit, admin tools, status | Restore works |
+| 4. Release | Docker install with Traefik, docs, release pipeline | Clean server to working service by following the docs |
+| 5. Later | Row-level access for end users, realtime, MongoDB, more SDKs | Each passes the isolation suite |
 
-**First release scope**
-
-| In the first release | Not in the first release |
-| --- | --- |
-| Postgres, cache, object storage | MongoDB, vector, MySQL |
-| Shared hosts, single-host compose install | Dedicated instances per resource, automatic failover |
-| Admin, invites, plans as limits presets | Organizations and teams with shared projects |
-| Native connection strings, data API, TypeScript SDK, CLI | Other SDK languages, webhooks |
-| Backups with automated restore tests | Multi-region |
-| Traefik with ACME, bring-your-own-Traefik profile | Kubernetes and Helm |
-
-## Community and adoption
-
-The project succeeds if people run it and trust it. The strategy is to make the first install effortless and the isolation story easy to verify.
-
-- **The repo is the front door.** README with a 60-second demo, a clear quickstart, a public roadmap, a "good first issue" label and a changelog.
-- **Landing page.** Explains the project, links to GitHub, and collects a release list (one email at first release) and a newsletter for build-in-public updates.
-- **Build in public.** Post the isolation tests, the provisioning flow and the Traefik routing as they land. Tie it to the 100 Days of Backend series.
-- **Docs as onboarding.** Quickstarts per resource, framework guides (Hono, Express, NestJS, Next.js, FastAPI, Go), a sizing guide and the runbooks.
-- **Templates.** Starter repos with `.env` wiring done, each using Postgres, cache and storage.
-- **Launch.** Show HN, Reddit's self-hosting communities, dev.to, and self-hosted app catalogs (for example the Coolify and Dokploy templates) once the first release passes its gate.
-
-**What to watch:** time from `docker compose up` to a first successful connection, install failures reported in issues, GitHub stars, contributors, and opt-in install counts (no telemetry without consent).
+The dashboard is built alongside every stage.
 
 ## Licensing
 
-| Part | License | Reason |
-| --- | --- | --- |
-| Control plane, worker, drivers, dashboard | AGPL-3.0 | Anyone who runs a modified copy as a public service shares their changes |
-| SDK and CLI | MIT | Nothing discourages putting them in a closed-source app |
+| Part | License |
+| --- | --- |
+| Server, drivers, dashboard | AGPL-3.0 |
+| SDK and CLI | MIT |
 
-Contribution policy: DCO (a `Signed-off-by` line on each commit), decided before the first outside pull request.
+Contribution policy: DCO.
 
 ## Risks and open questions
 
-The biggest risks are a cross-tenant data leak and an install that is too hard to get running. Both are manageable if the first release stays small and the isolation and install tests come first.
+| Risk | Mitigation |
+| --- | --- |
+| Cross-tenant data access | Per-service roles and credentials, `REVOKE ... FROM PUBLIC` on every database, project API runs as the service role, isolation tests in CI |
+| SQL over HTTP abuse | Runs as the tenant role with timeouts and row and size caps |
+| Install too hard | Local dev without Docker; Docker install with an end-to-end test |
+| Noisy neighbors | Connection and timeout limits, host monitoring |
+| Shared Redis eviction | Reconsider a process per cache service |
+| Single server fails | Off-site backups, restore runbook |
 
-**Risks**
+**Open questions**
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Cross-tenant data access | Fatal to trust | Per-resource roles and credentials, `REVOKE ... FROM PUBLIC`, isolation contract tests in CI, an external review before the first release |
-| Install fails on real servers | People give up in the first ten minutes | End-to-end install test in CI on a clean VM, clear error messages for DNS and certificate problems |
-| Certificate issuance problems | Resources unreachable over TLS | `acme-dns` wildcard as default, documented `custom` mode, a dashboard warning when a certificate fails |
-| Postgres clients without SNI | Cannot be routed by Traefik | Document minimum client versions; offer a per-host port mapping fallback for old clients |
-| Noisy neighbors on shared hosts | Slow or failing tenants | Connection and timeout limits, per-host monitoring, move heavy resources to another host |
-| Shared Redis eviction and memory | One tenant degrades others | Reconsider a process per resource for the cache |
-| Single server fails | All resources down | Off-site backups by default in the docs; optional WAL archiving; restore runbook |
-| Garage feature gaps | Garage implements a subset of S3 (no bucket policies, no STS, limited versioning) | Document supported S3 features; test common clients (AWS SDK, `aws s3`, `rclone`) in CI |
-| Scope too wide for one builder | Nothing ships | First release is Postgres, cache and storage only |
-| Data loss | Fatal | Backups restored automatically every week; documented retention |
-
-**Open questions to decide**
-
-- [ ] Redis: shared instance with ACL prefixes (current default), or a small process per resource?
-- [ ] When to add external S3 backends (R2, AWS S3) with the prefix-per-resource model?
-- [ ] Should members be able to change their own resources' plans by default?
-- [ ] How does Sparkbase relate to SparkDB: rebrand, successor, or separate?
-- [ ] Does MySQL or MariaDB come in Phase 2, or wait until people ask?
-- [ ] Which SDK languages after TypeScript: Python, Go?
-- [ ] Organizations or shared projects: needed for the first release, or later?
-
-**Sources.** This spec is a plan built from the decisions in our discussion and general engineering practice. It cites no external data. Default limits are starting points to be tuned on real hardware. Claims about Traefik and Garage features must be checked against their current documentation when each step is built.
+- [ ] Redis: shared instance with ACL prefixes (default), or a process per service?
+- [ ] Row-level access for end users: Postgres RLS with JWT claims, Supabase style?
+- [ ] External S3 backends (R2, AWS S3) with a prefix-per-service model?
+- [ ] How does Sparkbase relate to SparkDB?
