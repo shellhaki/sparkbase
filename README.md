@@ -21,6 +21,16 @@ await sb.queue('jobs').queue('emails').send({ to: 'ada@example.com' })
 
 No paid tier, no hosted edition, no feature gating.
 
+## Install on a server
+
+```bash
+git clone https://github.com/shellhaki/sparkbase && cd sparkbase/deploy
+cp .env.example .env && ./generate-secrets.sh   # set SPARKBASE_DOMAIN, TLS_MODE, ACME_EMAIL
+docker compose up -d
+```
+
+Open `https://app.<your domain>/setup`: the first account is the admin. Full guide: [docs/self-hosting.md](docs/self-hosting.md).
+
 ## Run it locally
 
 Needs Go, Bun, Postgres 17+ and Redis installed (for example `brew install go bun postgresql@18 redis`). No Docker.
@@ -48,6 +58,8 @@ First run: open http://localhost:3000/setup and create your account. The first a
 | `web/dashboard/` | Next.js dashboard on Bun |
 | `sdk/js/` | `@sparkbase/sdk` |
 | `scripts/` | Dev services, dev runner, test helpers |
+| `deploy/` | Docker install: compose, Traefik, Postgres host, Garage |
+| `docs/` | Documentation |
 | `spec.md`, `agent.md`, `DECISIONS.md` | Product spec, build guide, decision log |
 | `waitlist/` | Landing page (separate app) |
 
@@ -58,4 +70,9 @@ scripts/dev-services.sh start
 cd server && make test                                   # Go unit + integration, incl. isolation suites
 cd sdk/js && ../../scripts/with-server.sh bun test       # SDK against a live server
 scripts/with-server.sh scripts/e2e-dashboard.sh          # dashboard smoke test
+scripts/e2e-compose.sh                                   # full Docker install through Traefik
 ```
+
+## License
+
+Server, drivers and dashboard: AGPL-3.0. SDK and CLI: MIT. See [CONTRIBUTING.md](CONTRIBUTING.md).
