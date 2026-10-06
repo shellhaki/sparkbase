@@ -24,13 +24,15 @@ jobs:
           sudo apt-get install -y postgresql-18 postgresql-18-pgvector redis-server
           sudo systemctl stop postgresql redis-server || true
       - name: Start dev services
-        run: PG_BIN=/usr/lib/postgresql/18/bin scripts/dev-services.sh start
+        run: |
+          PG_BIN=/usr/lib/postgresql/18/bin scripts/dev-services.sh start
+          scripts/dev-services.sh garage-start
       - name: Go lint
         working-directory: server
         run: make lint
       - name: Go tests
         working-directory: server
-        run: PATH=/usr/lib/postgresql/18/bin:$PATH make test
+        run: PATH=/usr/lib/postgresql/18/bin:$PATH SB_REQUIRE_GARAGE=1 make test
       - name: SDK tests
         working-directory: sdk/js
         run: bun install && bun run typecheck && PATH=/usr/lib/postgresql/18/bin:$PATH ../../scripts/with-server.sh bun test
@@ -38,3 +40,13 @@ jobs:
         run: |
           cd web/dashboard && bun install && bun run build && cd ../..
           PATH=/usr/lib/postgresql/18/bin:$PATH scripts/with-server.sh scripts/e2e-dashboard.sh
+
+  docker-install:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+      - name: Full install through Traefik
+        run: scripts/e2e-compose.sh
