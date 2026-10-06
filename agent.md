@@ -12,12 +12,12 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 
 **How to work**
 
-1. **Build in order.** Stages 0 to 3 now; Stage 4 (Docker, Traefik install, release) after. Do not build Stage 5 items.
+1. **Build in order.** Stages 0 to 5 are built. Do not build the items in *What not to build*.
 2. **One step at a time.** Finish a step, run its checks, commit, move on. A step is done when its **Done when** line is true and tests pass.
 3. **Keep going.** Do not stop at stage checks to ask for approval. Record choices in `DECISIONS.md` and continue. Stop only for something destructive outside the repository.
 4. **Small commits.** One logical change per commit. Plain commit messages with no co-author or tool attribution lines.
-5. **Tests are part of the step.** Integration tests run against real Postgres and Redis started by `scripts/dev-services.sh`, never mocks of those engines.
-6. **The dashboard grows with the backend.** When a stage adds an API, add its screen.
+5. **Tests are part of the step.** Integration tests run against real Postgres, Redis and Garage started by `scripts/dev-services.sh`, and real Docker for container tests, never mocks of those engines.
+6. **The dashboard and docs grow with the backend.** When a stage adds an API, add its screen and update the page in `docs/`.
 
 **Hard rules**
 
@@ -28,6 +28,8 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 - Every service has its own role, credentials and namespace. The project API runs as the service's own credentials.
 - Every long operation is a job, and every job step is idempotent.
 - Traefik is networking only. Nothing in the API or worker depends on it being present.
+- Only the server talks to Docker. Service containers get no Docker socket and publish no ports.
+- Outbound requests to user-given URLs (cron, monitor, webhooks, S3 endpoints) go through `netguard`.
 - No vendor lock: no cloud, DNS or S3 provider is required.
 
 ## Setup and conventions
@@ -40,11 +42,12 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 | Redis | `redis/go-redis/v9` |
 | Logging | `log/slog` JSON with a redaction helper |
 | Tests | `go test`, integration tests tagged by environment (`SPARKBASE_TEST_ENV`) |
-| Dashboard | Next.js App Router on Bun, Tailwind, same palette as `waitlist/` |
+| Dashboard | Next.js App Router on Bun, Tailwind; plain black and blue, no neon or glow |
+| Docs | Markdown in `docs/` with `nav.json`, rendered by the dashboard at `/docs` |
 | SDK | TypeScript in `packages/sdk-js`, built and tested with Bun |
 | Package manager | Bun for every JavaScript package. No pnpm, no npm workspaces |
 
-**Local environment.** `scripts/dev-services.sh start` runs private Postgres clusters (control on 54329, data host on 54330) and a private Redis (63799, ACLs on) from local binaries under `.dev/`. No Docker. `scripts/dev.sh` runs the server with the dev environment, and `cd apps/dashboard && bun dev` runs the UI.
+**Local environment.** `make dev` starts everything; `make backend`, `make frontend`, `make stop` and `make test` do one thing each. Under the hood, `scripts/dev-services.sh start` runs private Postgres clusters (control on 54329, data host on 54330) and a private Redis (63799, ACLs on) from local binaries under `.dev/`, and `garage-start` adds Garage. Development uses `ENGINE=shared` and needs no Docker; container tests run when Docker is available.
 
 ## Stage 0: Foundations
 
@@ -114,11 +117,25 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 
 ## Stage 4: Release (built)
 
-Docker images, `deploy/docker-compose.yml` with Traefik, PgBouncer, pgvector and Garage, bring-your-own-Traefik profile, end-to-end install test, docs site, license files (AGPL-3.0 core, MIT SDK and CLI), release pipeline.
+Docker images, `deploy/docker-compose.yml` with Traefik, PgBouncer, pgvector and Garage, bring-your-own-Traefik profile, end-to-end install test, license files (AGPL-3.0 core, MIT SDK and CLI), release pipeline.
+
+## Stage 5: Containers and platform services (built)
+
+**5.1 Container engine.** `dockerx` (Docker Engine API over the unix socket), one container per Postgres-family or cache service with the plan's memory limit and a named volume. *Done when:* provisioning, pause, resume and delete work against real Docker and leave no containers behind.
+
+**5.2 Scale to zero.** Activator with one TCP proxy per container service, connection counting in Redis, `scale_to_zero` job driven by the `idle_minutes` setting, wake on project API calls. *Done when:* a test sees an idle container stop and a new connection wake it, through Traefik in the compose e2e.
+
+**5.3 Live logs and metrics.** Log hub (Redis lists and pub/sub), SSE endpoints for service, container and server logs, redaction, per-minute metrics. *Done when:* tests stream lines live and secrets never appear.
+
+**5.4 Terminals.** psql-like console and Redis console, both as the service's own user. *Done when:* denied cache commands stay denied in the console.
+
+**5.5 Platform services.** `realtime` (broadcast, SSE subscribe, table change feeds), `cron` (http, sql, queue actions), `backup` (schedule, retention, local or S3), `monitor` (checks, alerts, webhook). *Done when:* each has integration tests, SDK methods and a dashboard screen, and private targets are blocked by default.
+
+**5.6 Dashboard and docs.** Logs, Metrics and Terminal tabs, architecture diagram with database add-ons, screens for every platform service, admin server logs, and the `/docs` site. *Done when:* the dashboard e2e and the compose e2e pass.
 
 ## What not to build
 
-Billing or paid tiers, a hosted edition, MongoDB, MySQL, realtime, row-level end-user policies, organizations, Kubernetes, default-on telemetry, and anything in `waitlist/`.
+Billing or paid tiers, a hosted edition, MongoDB, MySQL, row-level end-user policies, organizations, Kubernetes, default-on telemetry, and anything in `waitlist/`.
 
 ## When you are unsure
 

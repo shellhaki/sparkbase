@@ -19,3 +19,14 @@ One line per decision: date, choice, reason.
 - 2026-10-06: TLS_MODE gains `selfsigned` (Traefik's default certificate) for testing; native ports are configurable (NATIVE_PG_PORT etc.) so shifted-port installs print correct connection strings.
 - 2026-10-06: Encryption key rotation is a one-shot command, `sparkbase-server rotate-encryption-key`, re-encrypting all secrets in one transaction.
 - 2026-10-06: Service logos: Postgres and Redis use their simple-icons marks (CC0); storage, vector, queue and auth use drawn marks.
+- 2026-10-06: Container engine (`ENGINE=containers`) is the Docker install default: one container per Postgres-family or cache service with the plan's memory limit, stopped after `idle_minutes` (default 10) without connections or API calls and woken by the activator on the next connection. Owner's choice, so memory is only used while a service is in use. Docker is required for the install; development keeps `ENGINE=shared` without Docker.
+- 2026-10-06: The engine talks to the Docker Engine API over the unix socket directly (`internal/dockerx`), no Docker SDK.
+- 2026-10-06: Shared Postgres and Redis hosts move to the `shared-hosts` compose profile.
+- 2026-10-06: Platform services `realtime`, `cron`, `backup` and `monitor` run in the control plane (`runtime = control`) with no host, container or credentials.
+- 2026-10-06: Realtime uses Server-Sent Events over Redis pub/sub instead of WebSockets: works through every proxy and with `fetch`. Table change feeds use a trigger plus `pg_notify`; a live watch keeps the database awake.
+- 2026-10-06: User-given outbound URLs are checked by `netguard` (no private, loopback, link-local or metadata addresses) unless the admin turns on `allow_private_targets`.
+- 2026-10-06: Backups use `pg_dump --exclude-extension=*` so restores run as the tenant role.
+- 2026-10-06: Live logs are kept in capped Redis lists with pub/sub fan-out; redaction runs before storage.
+- 2026-10-06: Repository follows a monorepo layout: `server/`, `apps/dashboard`, `packages/sdk-js`, `deploy/`, `docs/`, `examples/`, `scripts/`.
+- 2026-10-06: Docs are Markdown in `docs/` with `nav.json`, rendered by the dashboard at `/docs` (marked plus shiki at build time). No separate docs app.
+- 2026-10-06: Dashboard style is plain black and blue. Service logos are neutral monochrome tiles. Owner's choice, replacing an earlier multicolor look.
