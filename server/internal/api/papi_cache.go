@@ -270,3 +270,5 @@ func (s *Server) cacheRoutes() {
 		return httpx.OK(w, map[string]any{"keys": keys, "truncated": cursor != 0})
 	})
 }
+
+func cacheKeyPrefix(res *store.Resource) string { return drivers.KeyPrefix(res.ID) }

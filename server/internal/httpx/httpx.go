@@ -137,6 +137,16 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 
 func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
+// Flush lets streaming responses (live logs) through the middleware.
+func (w *statusWriter) Flush() {
+	if w.status == 0 {
+		w.status = 200
+	}
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // Observer receives request timing for metrics.
 type Observer func(method, route string, status int, d time.Duration)
 

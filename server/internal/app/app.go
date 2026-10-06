@@ -19,6 +19,7 @@ import (
 	"github.com/shellhaki/sparkbase/server/internal/dockerx"
 	"github.com/shellhaki/sparkbase/server/internal/drivers"
 	"github.com/shellhaki/sparkbase/server/internal/engine"
+	"github.com/shellhaki/sparkbase/server/internal/logs"
 	"github.com/shellhaki/sparkbase/server/internal/mail"
 	"github.com/shellhaki/sparkbase/server/internal/sbcrypto"
 	"github.com/shellhaki/sparkbase/server/internal/store"
@@ -37,6 +38,7 @@ type App struct {
 	Counter *core.Counter
 	Tenants *tenant.Pools
 	Metrics *Metrics
+	Logs    *logs.Hub
 	// Engine runs services in their own containers; nil in shared mode.
 	Engine *engine.Engine
 	// Now is the clock; tests may replace it.
@@ -93,8 +95,11 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, mailer mail.
 		Counter: &core.Counter{R: rc, Prefix: cfg.RedisPrefix},
 		Tenants: tenant.New(st, box),
 		Metrics: NewMetrics(),
+		Logs:    &logs.Hub{R: rc, Prefix: cfg.RedisPrefix},
 		Now:     time.Now,
 	}
+	// Server logs also go to the live system log for admins.
+	a.Log = slog.New(logs.NewTee(log.Handler(), a.Logs))
 	if cfg.Engine == "containers" {
 		dc := dockerx.New(dockerx.SocketPath())
 		if err := dc.Ping(ctx); err != nil {

@@ -178,6 +178,8 @@ func (s *Server) routes() {
 	s.projectRoutes()
 	s.projectAPIRoutes()
 	s.internalRoutes()
+	s.observeRoutes()
+	s.consoleRoutes()
 	s.handle("/", func(w http.ResponseWriter, r *http.Request) error {
 		return httpx.NotFound("route " + r.Method + " " + r.URL.Path)
 	})

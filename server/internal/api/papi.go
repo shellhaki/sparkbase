@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
 	"errors"
+
+	"github.com/shellhaki/sparkbase/server/internal/logs"
 	"net/http"
 	"strings"
 	"time"
@@ -23,11 +26,15 @@ type pctx struct {
 	Access  int
 	// UserToken is an end-user access token from the auth service, if sent.
 	UserToken string
+	// ResourceID is the service the call reached, set by service().
+	ResourceID string
 }
 
 type projectHandler func(w http.ResponseWriter, r *http.Request, pc *pctx) error
 
 // papi registers a project API route that needs at least the given access.
+// Calls that reach a service are logged to that service's live log and
+// counted in its per-minute metrics.
 func (s *Server) papi(pattern string, need int, h projectHandler) {
 	s.handle(pattern, func(w http.ResponseWriter, r *http.Request) error {
 		pc, err := s.projectAuth(r)
@@ -40,8 +47,64 @@ func (s *Server) papi(pattern string, need int, h projectHandler) {
 		if err := s.rateLimit(w, r, "project:"+pc.Project.ID, 1200, time.Minute); err != nil {
 			return err
 		}
-		return h(w, r, pc)
+		start := time.Now()
+		rec := &statusCapture{ResponseWriter: w}
+		err = h(rec, r, pc)
+		if pc.ResourceID != "" {
+			status := rec.status
+			if err != nil {
+				status = 500
+				var e *httpx.Error
+				if errors.As(err, &e) {
+					status = e.Status
+				}
+			}
+			if status == 0 {
+				status = 200
+			}
+			s.logRequest(pc, r, status, time.Since(start), err)
+		}
+		return err
 	})
+}
+
+type statusCapture struct {
+	http.ResponseWriter
+	status int
+}
+
+func (c *statusCapture) WriteHeader(s int) {
+	c.status = s
+	c.ResponseWriter.WriteHeader(s)
+}
+
+func (c *statusCapture) Flush() {
+	if f, ok := c.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (c *statusCapture) Unwrap() http.ResponseWriter { return c.ResponseWriter }
+
+func (s *Server) logRequest(pc *pctx, r *http.Request, status int, d time.Duration, err error) {
+	ctx := context.WithoutCancel(r.Context())
+	level := "info"
+	if status >= 500 {
+		level = "error"
+	} else if status >= 400 {
+		level = "warn"
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/p/"+pc.Project.Slug)
+	fields := map[string]any{"status": status, "ms": d.Milliseconds(), "method": r.Method}
+	if err != nil {
+		var e *httpx.Error
+		if errors.As(err, &e) {
+			fields["code"] = e.Code
+			fields["error"] = e.Message
+		}
+	}
+	s.Logs.Push(ctx, logs.ServiceStream(pc.ResourceID), logs.Entry{Level: level, Source: "api", Message: r.Method + " " + path, Fields: fields})
+	s.Logs.Observe(ctx, pc.ResourceID, status, d)
 }
 
 func (s *Server) projectAuth(r *http.Request) (*pctx, error) {
@@ -121,6 +184,7 @@ func (s *Server) service(r *http.Request, pc *pctx, kind, name string) (*store.R
 	if err != nil {
 		return nil, err
 	}
+	pc.ResourceID = res.ID
 	if res.Status != "active" {
 		return nil, httpx.NotReady(res.Status)
 	}
