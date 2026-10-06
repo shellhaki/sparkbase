@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main, build]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+      - uses: oven-sh/setup-bun@v2
+      - name: Install Postgres 18 and Redis
+        run: |
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-18 postgresql-18-pgvector redis-server
+          sudo systemctl stop postgresql redis-server || true
+      - name: Start dev services
+        run: PG_BIN=/usr/lib/postgresql/18/bin scripts/dev-services.sh start
+      - name: Go lint
+        working-directory: server
+        run: make lint
+      - name: Go tests
+        working-directory: server
+        run: PATH=/usr/lib/postgresql/18/bin:$PATH make test
+      - name: SDK tests
+        working-directory: sdk/js
+        run: bun install && bun run typecheck && PATH=/usr/lib/postgresql/18/bin:$PATH ../../scripts/with-server.sh bun test
+      - name: Dashboard build and smoke test
+        run: |
+          cd web/dashboard && bun install && bun run build && cd ../..
+          PATH=/usr/lib/postgresql/18/bin:$PATH scripts/with-server.sh scripts/e2e-dashboard.sh
