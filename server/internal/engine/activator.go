@@ -113,31 +113,41 @@ func (a *Activator) serve(l net.Listener, id string) {
 
 func (a *Activator) handle(client net.Conn, id string) {
 	defer client.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	bg := context.Background()
+	// Count the connection before waking, so the idle reaper never stops a
+	// container while a client is waiting for it.
+	a.Redis.Incr(bg, a.connKey(id))
+	a.Redis.Expire(bg, a.connKey(id), 24*time.Hour)
+	defer a.Redis.Decr(bg, a.connKey(id))
+	_ = a.Store.TouchResource(bg, id)
+
+	ctx, cancel := context.WithTimeout(bg, 90*time.Second)
+	defer cancel()
 	r, err := a.Store.GetResource(ctx, id)
 	if err != nil {
-		cancel()
 		return
 	}
 	// Paused and suspended services are refused here; the client sees the
 	// connection close.
 	if err := a.Engine.Wake(ctx, r); err != nil {
-		cancel()
 		a.Log.Info("activator refused", "resource", id, "reason", err.Error())
 		return
 	}
-	cancel()
-	upstream, err := net.DialTimeout("tcp", a.Engine.Addr(r), 10*time.Second)
-	if err != nil {
-		return
+	// A container that just started can take a moment to show up on the
+	// network, so retry the dial briefly.
+	var upstream net.Conn
+	for attempt := 0; ; attempt++ {
+		upstream, err = net.DialTimeout("tcp", a.Engine.Addr(r), 5*time.Second)
+		if err == nil {
+			break
+		}
+		if attempt >= 20 || ctx.Err() != nil {
+			a.Log.Warn("activator dial", "resource", id, "err", err.Error())
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
 	defer upstream.Close()
-
-	bg := context.Background()
-	a.Redis.Incr(bg, a.connKey(id))
-	a.Redis.Expire(bg, a.connKey(id), 24*time.Hour)
-	defer a.Redis.Decr(bg, a.connKey(id))
-	_ = a.Store.TouchResource(bg, id)
 
 	// Keep the service marked active while the connection is open.
 	done := make(chan struct{})

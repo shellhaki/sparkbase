@@ -66,6 +66,13 @@ func (a *App) sampleOne(ctx context.Context, r *store.Resource, now time.Time) e
 	}
 	usage, err := d.MeasureUsage(ctx, t)
 	if err != nil {
+		// The reaper may have stopped the container since the check above.
+		if r.Runtime == "container" && a.Engine != nil {
+			if running, rerr := a.Engine.Running(ctx, r); rerr == nil && !running {
+				n, _ := a.Counter.Get(ctx, r.ID)
+				return a.Store.InsertUsage(ctx, r.ID, now, map[string]int64{"awake": 0, "container_memory_bytes": 0, "requests_month": n})
+			}
+		}
 		return err
 	}
 	if n, err := a.Counter.Get(ctx, r.ID); err == nil {

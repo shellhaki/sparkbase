@@ -50,5 +50,5 @@ set +e
 (cd "$ROOT/server" && E2E_HTTPS_PORT=8443 go test -count=1 -tags e2e -v ./internal/e2e/)
 STATUS=$?
 set -e
-if [ $STATUS -ne 0 ]; then "${DC[@]}" logs --tail 60 api traefik garage pgbouncer; fi
+if [ $STATUS -ne 0 ]; then "${DC[@]}" logs --tail 400 api traefik garage pgbouncer; fi
 exit $STATUS
