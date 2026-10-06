@@ -51,9 +51,11 @@ func New(a *app.App) *Worker {
 	return w
 }
 
-func (w *Worker) Handle(typ string, h Handler)     { w.handlers[typ] = h }
-func (w *Worker) OnFail(typ string, h FailHook)    { w.failHooks[typ] = h }
-func (w *Worker) Every(typ string, d time.Duration) { w.periodic = append(w.periodic, Periodic{typ, d}) }
+func (w *Worker) Handle(typ string, h Handler)  { w.handlers[typ] = h }
+func (w *Worker) OnFail(typ string, h FailHook) { w.failHooks[typ] = h }
+func (w *Worker) Every(typ string, d time.Duration) {
+	w.periodic = append(w.periodic, Periodic{typ, d})
+}
 
 func (w *Worker) types() []string {
 	out := make([]string, 0, len(w.handlers))
