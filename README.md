@@ -23,14 +23,22 @@ No paid tier, no hosted edition, no feature gating.
 
 ## Run it locally
 
-Needs Go, Bun, and Postgres 17+ and Redis installed (for example `brew install go bun postgresql@18 redis`). No Docker.
+Needs Go, Bun, Postgres 17+ and Redis installed (for example `brew install go bun postgresql@18 redis`). No Docker.
 
 ```bash
-scripts/dev.sh                     # starts private Postgres + Redis, then the server on :8787
-cd web/dashboard && bun install && SPARKBASE_API_URL=http://localhost:8787 bun dev
+make dev        # backend on :8787 + dashboard on :3000, Ctrl+C stops both
 ```
 
-The server prints a one-time setup token. Open http://localhost:3000/setup, paste it and create the admin account.
+Or separately, in two terminals:
+
+```bash
+make backend    # API + worker, starts private Postgres and Redis
+make frontend   # dashboard
+```
+
+`make stop` stops the private Postgres and Redis.
+
+First run: the backend prints a setup token. Open http://localhost:3000/setup, paste it and create the admin account.
 
 ## Repository
 
