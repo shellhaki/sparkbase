@@ -3,10 +3,12 @@
 # No Docker: uses the postgres and redis-server binaries already installed.
 #
 #   scripts/dev-services.sh start | stop | status | reset
+#   scripts/dev-services.sh garage-start | garage-stop   (optional, needs Docker)
 #
 # Control Postgres  : 127.0.0.1:54329  user sparkbase / sparkbase, db sparkbase
 # Data host Postgres: 127.0.0.1:54330  user sb_admin / devadmin (superuser)
 # Redis             : 127.0.0.1:63799  default user password devredis
+# Garage (optional) : S3 127.0.0.1:39000, admin 127.0.0.1:39003, admin token devgarage
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -105,7 +107,45 @@ status() {
   return $ok
 }
 
+GARAGE_IMAGE="${GARAGE_IMAGE:-dxflrs/garage:v2.4.1}"
+
+garage_start() {
+  mkdir -p "$DEV/garage/meta" "$DEV/garage/data"
+  cat >"$DEV/garage/garage.toml" <<TOML
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "0000000000000000000000000000000000000000000000000000000000000001"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "devgarage"
+TOML
+  if ! docker ps --format '{{.Names}}' | grep -q '^sparkbase-dev-garage$'; then
+    docker rm -f sparkbase-dev-garage >/dev/null 2>&1 || true
+    docker run -d --name sparkbase-dev-garage -p 127.0.0.1:39000:3900 -p 127.0.0.1:39003:3903 \
+      -v "$DEV/garage/garage.toml:/etc/garage.toml:ro" -v "$DEV/garage/meta:/var/lib/garage/meta" \
+      -v "$DEV/garage/data:/var/lib/garage/data" "$GARAGE_IMAGE" >/dev/null
+  fi
+  for _ in $(seq 1 50); do
+    curl -sf -H "Authorization: Bearer devgarage" http://127.0.0.1:39003/v2/GetClusterStatus >/dev/null 2>&1 && { echo "garage            127.0.0.1:39000  up"; return; }
+    sleep 0.2
+  done
+  echo "garage did not start" >&2
+  docker logs sparkbase-dev-garage 2>&1 | tail -20 >&2
+  exit 1
+}
+
 case "${1:-start}" in
+  garage-start) garage_start ;;
+  garage-stop) docker rm -f sparkbase-dev-garage >/dev/null 2>&1 || true; echo "garage stopped" ;;
   start) start ;;
   stop) stop ;;
   status) status ;;

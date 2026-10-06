@@ -128,6 +128,12 @@ func (s *Server) storageRoutes() {
 		if err != nil {
 			return err
 		}
+		if g, err := s.garageFor(r.Context(), res); err != nil || g != nil {
+			if err != nil {
+				return err
+			}
+			return g.list(w, r)
+		}
 		dir, _, err := s.Tenants.StorageDir(r.Context(), res)
 		if err != nil {
 			return err
@@ -149,6 +155,12 @@ func (s *Server) storageRoutes() {
 		if err != nil {
 			return err
 		}
+		if g, err := s.garageFor(r.Context(), res); err != nil || g != nil {
+			if err != nil {
+				return err
+			}
+			return g.put(w, r, r.PathValue("key"))
+		}
 		return s.putObject(w, r, res, r.PathValue("key"))
 	})
 
@@ -157,6 +169,12 @@ func (s *Server) storageRoutes() {
 		if err != nil {
 			return err
 		}
+		if g, err := s.garageFor(r.Context(), res); err != nil || g != nil {
+			if err != nil {
+				return err
+			}
+			return g.get(w, r, r.PathValue("key"))
+		}
 		return s.getObject(w, r, res, r.PathValue("key"))
 	})
 
@@ -164,6 +182,12 @@ func (s *Server) storageRoutes() {
 		res, err := s.service(r, pc, "storage", r.PathValue("name"))
 		if err != nil {
 			return err
+		}
+		if g, err := s.garageFor(r.Context(), res); err != nil || g != nil {
+			if err != nil {
+				return err
+			}
+			return g.del(w, r, r.PathValue("key"))
 		}
 		dir, _, err := s.Tenants.StorageDir(r.Context(), res)
 		if err != nil {
@@ -204,6 +228,16 @@ func (s *Server) storageRoutes() {
 		res, err := s.service(r, pc, "storage", r.PathValue("name"))
 		if err != nil {
 			return err
+		}
+		if g, err := s.garageFor(r.Context(), res); err != nil || g != nil {
+			if err != nil {
+				return err
+			}
+			u, err := g.sign(in.Method, in.Key, in.ExpiresIn)
+			if err != nil {
+				return err
+			}
+			return httpx.OK(w, map[string]any{"url": u, "method": in.Method, "expiresAt": time.Now().Add(time.Duration(in.ExpiresIn) * time.Second).UTC()})
 		}
 		cred, err := s.Store.CurrentCredential(r.Context(), res.ID)
 		if err != nil {

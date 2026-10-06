@@ -550,6 +550,14 @@ func (s *Server) connectionInfo(ctx context.Context, res *store.Resource) (map[s
 	case "storage":
 		out["bucket"] = res.Ext()
 		out["backend"] = h.Config.Backend
+		if h.Config.Backend == "garage" {
+			endpoint := h.Config.S3Public
+			if endpoint == "" {
+				endpoint = h.Config.S3Endpoint
+			}
+			out["native"] = map[string]any{"endpoint": endpoint, "bucket": res.Ext(), "accessKeyId": c.Username,
+				"secretAccessKey": c.Secret, "region": h.Config.Region, "forcePathStyle": true}
+		}
 	case "auth":
 		out["jwtSecret"] = c.Extra
 		out["jwtAlgorithm"] = "HS256"
@@ -591,6 +599,11 @@ func (s *Server) checkHost(ctx context.Context, h *store.Host) error {
 			return errors.New("cannot connect")
 		}
 	case "storage":
+		if h.Config.Backend == "garage" {
+			if (&drivers.GarageAdmin{URL: h.Config.AdminURL, Token: secret}).Ping(ctx) != nil {
+				return errors.New("cannot reach the Garage admin API")
+			}
+		}
 		if h.Config.Backend == "local" {
 			if _, _, err := drivers.DirUsage(h.Config.Root); err != nil {
 				return errors.New("root directory is not readable")

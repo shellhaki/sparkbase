@@ -83,7 +83,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, mailer mail.
 			"queue":    drivers.NewQueue(),
 			"auth":     drivers.NewAuth(),
 			"cache":    drivers.NewCache(),
-			"storage":  drivers.NewLocalStorage(),
+			"storage":  drivers.NewStorage(),
 		},
 		Limiter: &core.RateLimiter{R: rc, Prefix: cfg.RedisPrefix},
 		Counter: &core.Counter{R: rc, Prefix: cfg.RedisPrefix},
@@ -137,12 +137,31 @@ func (a *App) BootstrapHosts(ctx context.Context) error {
 	}
 	if a.Cfg.BootstrapStorage != "" {
 		u, err := url.Parse(a.Cfg.BootstrapStorage)
-		if err != nil || u.Scheme != "local" {
-			return fmt.Errorf("BOOTSTRAP_STORAGE must be local:///absolute/path")
-		}
-		cfg := store.HostConfig{Backend: "local", Root: u.Path}
-		if _, err := a.RegisterHost(ctx, "storage", "storage-1", "local", cfg, sbcrypto.RandomString(32), 100); err != nil && err != store.ErrConflict {
-			return err
+		switch {
+		case err == nil && u.Scheme == "local":
+			cfg := store.HostConfig{Backend: "local", Root: u.Path}
+			if _, err := a.RegisterHost(ctx, "storage", "storage-1", "local", cfg, sbcrypto.RandomString(32), 100); err != nil && err != store.ErrConflict {
+				return err
+			}
+		case err == nil && u.Scheme == "garage" && u.User != nil:
+			// garage://ADMIN_TOKEN@garage:3903?s3=http://garage:3900&public=https://s3.example.com&region=garage
+			q := u.Query()
+			scheme := "http"
+			if q.Get("tls") == "1" {
+				scheme = "https"
+			}
+			cfg := store.HostConfig{Backend: "garage", AdminURL: scheme + "://" + u.Host, S3Endpoint: q.Get("s3"), S3Public: q.Get("public"), Region: q.Get("region")}
+			if cfg.S3Endpoint == "" {
+				return fmt.Errorf("BOOTSTRAP_STORAGE garage URL needs ?s3=http://garage:3900")
+			}
+			if cfg.Region == "" {
+				cfg.Region = "garage"
+			}
+			if _, err := a.RegisterHost(ctx, "storage", "storage-1", cfg.AdminURL, cfg, u.User.Username(), 100); err != nil && err != store.ErrConflict {
+				return err
+			}
+		default:
+			return fmt.Errorf("BOOTSTRAP_STORAGE must be local:///absolute/path or garage://ADMIN_TOKEN@host:3903?s3=http://host:3900")
 		}
 	}
 	return nil
@@ -179,6 +198,20 @@ func (a *App) BootstrapHost(ctx context.Context, h *store.Host) error {
 		cfg.HasVector = hasVector
 		if err := a.Store.UpdateHost(ctx, h.ID, nil, nil, &cfg); err != nil {
 			return err
+		}
+	case "storage":
+		if h.Config.Backend == "garage" {
+			g := &drivers.GarageAdmin{URL: h.Config.AdminURL, Token: secret}
+			var err error
+			for i := 0; i < 30; i++ {
+				if err = g.BootstrapLayout(ctx, 1<<40); err == nil {
+					break
+				}
+				time.Sleep(time.Second)
+			}
+			if err != nil {
+				return fmt.Errorf("bootstrap host %s: %w", h.Name, err)
+			}
 		}
 	case "cache":
 		rc := drivers.AdminClient(h.InternalAddr, secret)

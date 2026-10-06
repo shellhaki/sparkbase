@@ -54,8 +54,29 @@ type Env struct {
 	dbName string
 }
 
+// GarageURL is the dev Garage started by scripts/dev-services.sh garage-start.
+var GarageURL = envOr("SB_TEST_GARAGE", "garage://devgarage@127.0.0.1:39003?s3=http://127.0.0.1:39000&region=garage")
+
+// Option changes how an Env is built.
+type Option func(vars map[string]string, t *testing.T)
+
+// WithGarage uses Garage as the storage host, or skips when it is not running.
+func WithGarage() Option {
+	return func(vars map[string]string, t *testing.T) {
+		res, err := http.Get("http://127.0.0.1:39003/health")
+		if err != nil {
+			if os.Getenv("SB_REQUIRE_GARAGE") == "1" {
+				t.Fatalf("garage is not running: %v", err)
+			}
+			t.Skip("garage is not running; start it with scripts/dev-services.sh garage-start")
+		}
+		res.Body.Close()
+		vars["BOOTSTRAP_STORAGE"] = GarageURL
+	}
+}
+
 // New starts an Env, or skips the test when dev services are not running.
-func New(t *testing.T) *Env {
+func New(t *testing.T, opts ...Option) *Env {
 	t.Helper()
 	ctx := context.Background()
 	admin, err := pgx.Connect(ctx, ControlAdminURL)
@@ -93,6 +114,9 @@ func New(t *testing.T) *Env {
 		"BOOTSTRAP_CACHE_HOST": CacheHostURL,
 		"BOOTSTRAP_STORAGE":    "local://" + t.TempDir(),
 		"BACKUP_DIR":           t.TempDir(),
+	}
+	for _, o := range opts {
+		o(vars, t)
 	}
 	cfg, err := config.Load(func(k string) string { return vars[k] })
 	if err != nil {
@@ -336,5 +360,17 @@ func (e *Env) ProjectClient(key string) *Client {
 func (e *Env) Drain() {
 	if err := e.Worker.Drain(context.Background()); err != nil {
 		e.T.Fatal(err)
+	}
+}
+
+// WaitGone waits until a deleted service no longer exists.
+func (e *Env) WaitGone(c *Client, id string) {
+	e.T.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for c.Do("GET", "/v1/resources/"+id, nil).Status != 404 {
+		if time.Now().After(deadline) {
+			e.T.Fatalf("service %s was never deleted", id)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/shellhaki/sparkbase/server/internal/drivers"
+	"github.com/shellhaki/sparkbase/server/internal/s3"
 	"github.com/shellhaki/sparkbase/server/internal/sbcrypto"
 	"github.com/shellhaki/sparkbase/server/internal/store"
 )
@@ -207,6 +208,23 @@ func (p *Pools) Close() {
 		e.client.Close()
 	}
 	p.pg, p.rd = map[string]*pgEntry{}, map[string]*redisEntry{}
+}
+
+// S3 returns an S3 client logged in with a Garage storage service's own key.
+func (p *Pools) S3(ctx context.Context, r *store.Resource, h *store.Host) (*s3.Client, error) {
+	cred, err := p.Store.CurrentCredential(ctx, r.ID)
+	if err != nil {
+		return nil, err
+	}
+	secret, err := p.Box.OpenString(cred.SecretEnc)
+	if err != nil {
+		return nil, err
+	}
+	region := h.Config.Region
+	if region == "" {
+		region = "garage"
+	}
+	return &s3.Client{Endpoint: h.Config.S3Endpoint, Region: region, AccessKey: cred.Username, SecretKey: secret}, nil
 }
 
 // StorageDir returns the directory of a local storage service.
