@@ -213,7 +213,7 @@ func (a *App) RunBackup(ctx context.Context, resourceID, backupID string) error 
 	if err != nil {
 		return fail(err)
 	}
-	cmd := exec.CommandContext(ctx, pgTool(t.H, "pg_dump"), "--format=custom", "--no-owner", "--no-privileges",
+	cmd := exec.CommandContext(ctx, pgTool(t.H, "pg_dump"), "--format=custom", "--no-owner", "--no-privileges", "--exclude-extension=*",
 		"--dbname", drivers.AdminURL(t.H, t.AdminSecret, r.Ext()))
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
