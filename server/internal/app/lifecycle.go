@@ -31,6 +31,9 @@ type Settings struct {
 	// IdleMinutes is how long a container service may sit unused before it
 	// is stopped. 0 keeps containers running.
 	IdleMinutes int `json:"idleMinutes"`
+	// AllowPrivateTargets lets cron webhooks and uptime checks reach private
+	// networks. Off by default so tenants cannot probe the install.
+	AllowPrivateTargets bool `json:"allowPrivateTargets"`
 }
 
 func (a *App) Settings(ctx context.Context) (Settings, error) {
@@ -49,6 +52,7 @@ func (a *App) Settings(ctx context.Context) (Settings, error) {
 	get("members_change_plans", &s.MembersChangePlans)
 	get("rotation_grace_seconds", &s.RotationGraceSecs)
 	get("idle_minutes", &s.IdleMinutes)
+	get("allow_private_targets", &s.AllowPrivateTargets)
 	return s, nil
 }
 

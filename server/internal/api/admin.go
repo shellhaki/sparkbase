@@ -193,6 +193,7 @@ func (s *Server) adminRoutes() {
 			MembersChangePlans *bool `json:"membersChangePlans"`
 			RotationGraceSecs  *int  `json:"rotationGraceSeconds"`
 			IdleMinutes        *int  `json:"idleMinutes"`
+			AllowPrivate       *bool `json:"allowPrivateTargets"`
 		}
 		if err := httpx.Decode(r, &in, 0); err != nil {
 			return err
@@ -219,6 +220,9 @@ func (s *Server) adminRoutes() {
 				return httpx.Invalid("rotationGraceSeconds must be 0 to 604800")
 			}
 			set["rotation_grace_seconds"] = *in.RotationGraceSecs
+		}
+		if in.AllowPrivate != nil {
+			set["allow_private_targets"] = *in.AllowPrivate
 		}
 		if in.IdleMinutes != nil {
 			if *in.IdleMinutes < 0 || *in.IdleMinutes > 1440 {

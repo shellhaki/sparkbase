@@ -122,6 +122,10 @@ func (s *Server) projectAuth(r *http.Request) (*pctx, error) {
 	pc := &pctx{Project: proj}
 
 	key := strings.TrimSpace(r.Header.Get("apikey"))
+	if key == "" && strings.HasSuffix(r.URL.Path, "/subscribe") {
+		// EventSource cannot send headers.
+		key = strings.TrimSpace(r.URL.Query().Get("apikey"))
+	}
 	tok := bearer(r)
 	if key == "" && (strings.HasPrefix(tok, sbcrypto.PrefixPublishable) || strings.HasPrefix(tok, sbcrypto.PrefixSecret)) {
 		key, tok = tok, ""

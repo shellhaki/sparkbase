@@ -180,6 +180,10 @@ func (s *Server) routes() {
 	s.internalRoutes()
 	s.observeRoutes()
 	s.consoleRoutes()
+	s.cronRoutes()
+	s.monitorRoutes()
+	s.backupRoutes()
+	s.realtimeRoutes()
 	s.handle("/", func(w http.ResponseWriter, r *http.Request) error {
 		return httpx.NotFound("route " + r.Method + " " + r.URL.Path)
 	})

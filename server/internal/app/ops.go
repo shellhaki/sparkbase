@@ -302,16 +302,43 @@ func (a *App) RunBackup(ctx context.Context, resourceID, backupID string) error 
 	sealed := a.Box.Seal(out.Bytes())
 	sum := sha256.Sum256(sealed)
 	key := filepath.Join(drivers.BucketName(r.ID), backupID+".dump.enc")
-	full := filepath.Join(a.backupDir(), key)
-	if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
-		return fail(err)
-	}
-	if err := os.WriteFile(full, sealed, 0o600); err != nil {
-		return fail(err)
-	}
 	days := r.Limits.Get("backup_days")
 	if days <= 0 {
 		days = 3
+	}
+	b, err := a.Store.GetBackup(ctx, backupID)
+	if err != nil {
+		return fail(err)
+	}
+	if b.ViaResourceID != nil {
+		// Taken by a backup service: its retention and destination apply.
+		via, err := a.Store.GetResource(ctx, *b.ViaResourceID)
+		if err != nil {
+			return fail(err)
+		}
+		bs := a.BackupSettingsOf(via)
+		if bs.RetentionDays > 0 {
+			days = int64(bs.RetentionDays)
+		}
+		if b.Destination == "s3" {
+			c, bucket, prefix, err := a.backupS3(bs)
+			if err != nil {
+				return fail(err)
+			}
+			key = prefix + r.ProjectSlug + "/" + r.Name + "/" + backupID + ".dump.enc"
+			if err := c.Put(ctx, bucket, key, bytes.NewReader(sealed), int64(len(sealed)), "application/octet-stream"); err != nil {
+				return fail(fmt.Errorf("upload to the backup bucket: %w", err))
+			}
+		}
+	}
+	if b.Destination != "s3" {
+		full := filepath.Join(a.backupDir(), key)
+		if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
+			return fail(err)
+		}
+		if err := os.WriteFile(full, sealed, 0o600); err != nil {
+			return fail(err)
+		}
 	}
 	if err := a.Store.FinishBackup(ctx, backupID, key, int64(len(sealed)), hex.EncodeToString(sum[:]),
 		a.Now().Add(time.Duration(days)*24*time.Hour)); err != nil {
@@ -334,7 +361,7 @@ func (a *App) RestoreBackup(ctx context.Context, actorID string, r *store.Resour
 	if b.Status != "done" || b.ObjectKey == nil {
 		return fmt.Errorf("backup is not complete")
 	}
-	sealed, err := os.ReadFile(filepath.Join(a.backupDir(), *b.ObjectKey))
+	sealed, err := a.readBackup(ctx, b)
 	if err != nil {
 		return err
 	}
@@ -392,6 +419,12 @@ func (a *App) Housekeeping(ctx context.Context) error {
 		return err
 	}
 	if err := a.Store.DeleteExpiredSessions(ctx); err != nil {
+		return err
+	}
+	if err := a.Store.PruneMonitorResults(ctx, 8*24*time.Hour); err != nil {
+		return err
+	}
+	if _, err := a.Store.Pool.Exec(ctx, `delete from cron_runs where started_at < now() - interval '30 days'`); err != nil {
 		return err
 	}
 	expired, err := a.Store.ExpiredBackups(ctx)
