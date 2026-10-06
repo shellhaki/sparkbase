@@ -385,8 +385,8 @@ sparkbase/
       drivers/ (postgres, cache, storage, vector, queue, auth)
       core/    (domain rules: plans, limits, scheduler, keys)
       testenv/ (helpers for integration tests)
-  web/dashboard/   Next.js on Bun
-  sdk/js/          @sparkbase/sdk
+  apps/dashboard/   Next.js on Bun
+  packages/sdk-js/          @sparkbase/sdk
   deploy/          compose files, Traefik config (later)
   scripts/         dev-services.sh and helpers
   waitlist/        landing page (separate app)

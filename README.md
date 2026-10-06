@@ -55,8 +55,8 @@ First run: open http://localhost:3000/setup and create your account. The first a
 | Path | What |
 | --- | --- |
 | `server/` | Go: API, worker and drivers (`cmd/sparkbase-server`) and the CLI (`cmd/sparkbase`) |
-| `web/dashboard/` | Next.js dashboard on Bun |
-| `sdk/js/` | `@sparkbase/sdk` |
+| `apps/dashboard/` | Next.js dashboard on Bun |
+| `packages/sdk-js/` | `@sparkbase/sdk` |
 | `scripts/` | Dev services, dev runner, test helpers |
 | `deploy/` | Docker install: compose, Traefik, Postgres host, Garage |
 | `docs/` | Documentation |
@@ -68,7 +68,7 @@ First run: open http://localhost:3000/setup and create your account. The first a
 ```bash
 scripts/dev-services.sh start
 cd server && make test                                   # Go unit + integration, incl. isolation suites
-cd sdk/js && ../../scripts/with-server.sh bun test       # SDK against a live server
+cd packages/sdk-js && ../../scripts/with-server.sh bun test       # SDK against a live server
 scripts/with-server.sh scripts/e2e-dashboard.sh          # dashboard smoke test
 scripts/e2e-compose.sh                                   # full Docker install through Traefik
 ```

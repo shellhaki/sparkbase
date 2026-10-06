@@ -15,7 +15,7 @@ Optional suites:
 
 ```bash
 scripts/dev-services.sh garage-start                     # Garage in Docker, for the S3 backend tests
-cd sdk/js && ../../scripts/with-server.sh bun test       # SDK against a live server
+cd packages/sdk-js && ../../scripts/with-server.sh bun test       # SDK against a live server
 scripts/with-server.sh scripts/e2e-dashboard.sh          # dashboard smoke test
 scripts/e2e-compose.sh                                   # full Docker install through Traefik
 ```
@@ -40,4 +40,4 @@ CI checks it on every pull request.
 
 ## Licenses
 
-The server, drivers and dashboard are AGPL-3.0 (`LICENSE`). The SDK (`sdk/js`) and the CLI (`server/cmd/sparkbase`, `server/internal/cli`) are MIT, so they can go into closed-source apps. By contributing you agree your work is released under the license of the files you change.
+The server, drivers and dashboard are AGPL-3.0 (`LICENSE`). The SDK (`packages/sdk-js`) and the CLI (`server/cmd/sparkbase`, `server/internal/cli`) are MIT, so they can go into closed-source apps. By contributing you agree your work is released under the license of the files you change.

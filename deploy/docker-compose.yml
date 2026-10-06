@@ -81,7 +81,7 @@ services:
   dashboard:
     <<: *restart
     image: ghcr.io/shellhaki/sparkbase-dashboard:${SPARKBASE_VERSION:-latest}
-    build: ../web/dashboard
+    build: ../apps/dashboard
     environment:
       SPARKBASE_API_URL: http://api:8787
     networks: [web]

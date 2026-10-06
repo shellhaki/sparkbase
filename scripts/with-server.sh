@@ -2,7 +2,7 @@
 # Starts a throwaway Sparkbase server on a fresh control database, runs a
 # command with SB_API set, then stops and cleans up.
 #
-#   scripts/with-server.sh bun test        (from sdk/js)
+#   scripts/with-server.sh bun test        (from packages/sdk-js)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/scripts/dev-services.sh" start >/dev/null

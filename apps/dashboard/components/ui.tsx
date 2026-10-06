@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Copy, Eye, EyeOff, Loader2, X } from "lucide-react";
+import { toast } from "./toast";
 import { useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 export function cn(...parts: Array<string | false | null | undefined>) {
@@ -88,7 +89,7 @@ export function Field({ label, hint, children }: { label: string; hint?: ReactNo
 
 export function Card({ className, children, style }: { className?: string; children: ReactNode; style?: CSSProperties }) {
   return (
-    <div className={cn("rounded-xl border border-border bg-card", className)} style={style}>
+    <div className={cn("rounded-2xl border border-border bg-card/80 backdrop-blur-sm", className)} style={style}>
       {children}
     </div>
   );
@@ -98,7 +99,7 @@ export function CardHeader({ title, description, action }: { title: ReactNode; d
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
       <div className="min-w-0">
-        <h2 className="font-display text-base font-semibold">{title}</h2>
+        <h2 className="font-mono text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{title}</h2>
         {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
       {action}
@@ -146,6 +147,7 @@ export function useCopy() {
     copy: async (value: string, id = value) => {
       await navigator.clipboard.writeText(value);
       setCopied(id);
+      toast("Copied");
     },
   };
 }
@@ -276,7 +278,7 @@ export function Empty({ title, children, action }: { title: string; children?: R
 
 export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: Array<{ id: T; label: string }>; value: T; onChange: (t: T) => void }) {
   return (
-    <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-border">
+    <div role="tablist" className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl border border-border bg-card/60 p-1">
       {tabs.map((t) => (
         <button
           key={t.id}
@@ -284,8 +286,8 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: Array<
           aria-selected={value === t.id}
           onClick={() => onChange(t.id)}
           className={cn(
-            "-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-            value === t.id ? "border-brand text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+            "shrink-0 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] duration-200",
+            value === t.id ? "bg-accent text-foreground shadow-[inset_0_0_0_1px_var(--border)]" : "text-muted-foreground hover:text-foreground",
           )}
         >
           {t.label}

@@ -41,10 +41,10 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 | Logging | `log/slog` JSON with a redaction helper |
 | Tests | `go test`, integration tests tagged by environment (`SPARKBASE_TEST_ENV`) |
 | Dashboard | Next.js App Router on Bun, Tailwind, same palette as `waitlist/` |
-| SDK | TypeScript in `sdk/js`, built and tested with Bun |
+| SDK | TypeScript in `packages/sdk-js`, built and tested with Bun |
 | Package manager | Bun for every JavaScript package. No pnpm, no npm workspaces |
 
-**Local environment.** `scripts/dev-services.sh start` runs private Postgres clusters (control on 54329, data host on 54330) and a private Redis (63799, ACLs on) from local binaries under `.dev/`. No Docker. `scripts/dev.sh` runs the server with the dev environment, and `cd web/dashboard && bun dev` runs the UI.
+**Local environment.** `scripts/dev-services.sh start` runs private Postgres clusters (control on 54329, data host on 54330) and a private Redis (63799, ACLs on) from local binaries under `.dev/`. No Docker. `scripts/dev.sh` runs the server with the dev environment, and `cd apps/dashboard && bun dev` runs the UI.
 
 ## Stage 0: Foundations
 

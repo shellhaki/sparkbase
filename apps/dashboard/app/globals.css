@@ -187,7 +187,6 @@ html {
 .card-hover:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
-  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--brand) 35%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -201,4 +200,90 @@ html {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --grid-dot: color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+
+/* Dot grid behind the workspace, fading out toward the bottom. */
+.dot-grid {
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, black, transparent 520px);
+}
+
+/* Soft colored light behind hero areas. */
+.aurora {
+  position: absolute;
+  inset: -120px -80px auto -80px;
+  height: 380px;
+  pointer-events: none;
+  display: none;
+}
+
+/* Rotating greeting: blur crossfade masks the swap between words. */
+.greet-word {
+  display: inline-block;
+  transition:
+    opacity 380ms var(--ease-out),
+    transform 380ms var(--ease-out),
+    filter 380ms var(--ease-out);
+}
+.greet-word[data-state="out"] {
+  opacity: 0;
+  transform: translateY(-10px);
+  filter: blur(6px);
+}
+.greet-word[data-state="in"] {
+  opacity: 1;
+  transform: none;
+  filter: blur(0);
+}
+
+/* Status light. */
+.led {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: currentColor;
+}
+.led[data-live="true"]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid currentColor;
+  animation: pulse-ring 1.8s var(--ease-out) infinite;
+}
+
+/* Toasts enter from below and leave the same way. */
+.toast {
+  transition:
+    opacity 220ms var(--ease-out),
+    transform 220ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lift:hover {
+    transform: translateY(-2px);
+  }
+}
+.lift {
+  transition:
+    transform 200ms var(--ease-out),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
 }

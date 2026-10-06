@@ -1,13 +1,13 @@
 import { POSTGRES_PATH, REDIS_PATH } from "./paths";
 
-/** Brand color per service kind, used for the logo tile. */
+/** Every kind uses the brand blue; the shapes tell services apart. */
 export const KIND_COLOR: Record<string, string> = {
-  postgres: "#7ea6f4",
-  cache: "#ff4438",
-  storage: "#f5a524",
-  vector: "#a77bf3",
-  queue: "#22b8a7",
-  auth: "#3fbf6f",
+  postgres: "var(--brand)",
+  cache: "var(--brand)",
+  storage: "var(--brand)",
+  vector: "var(--brand)",
+  queue: "var(--brand)",
+  auth: "var(--brand)",
 };
 
 function Mark({ kind, color }: { kind: string; color: string }) {
@@ -71,14 +71,10 @@ const SIZES = { sm: "size-8 rounded-lg p-1.5", md: "size-11 rounded-xl p-2.5", l
 
 /** A tinted tile with the service's logo. */
 export function ServiceLogo({ kind, size = "md", className = "" }: { kind: string; size?: keyof typeof SIZES; className?: string }) {
-  const color = KIND_COLOR[kind] ?? "#2d57fb";
+  const color = "currentColor";
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center ${SIZES[size]} ${className}`}
-      style={{
-        background: `linear-gradient(140deg, ${color}33, ${color}0d)`,
-        boxShadow: `inset 0 0 0 1px ${color}40`,
-      }}
+      className={`inline-flex shrink-0 items-center justify-center border border-border bg-muted text-foreground ${SIZES[size]} ${className}`}
       aria-hidden
     >
       <svg viewBox="0 0 24 24" className="size-full">

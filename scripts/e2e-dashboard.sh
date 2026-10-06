@@ -4,7 +4,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PORT="${DASH_PORT:-13000}"
-cd "$ROOT/web/dashboard"
+cd "$ROOT/apps/dashboard"
 [ -d .next ] || bun run build >/dev/null
 SPARKBASE_API_URL="$SB_API" PORT="$PORT" bun run start >/tmp/sb-dash.log 2>&1 &
 PID=$!

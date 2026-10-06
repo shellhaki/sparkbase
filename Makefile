@@ -10,7 +10,7 @@ backend:
 
 # Dashboard only (:3000), talks to the backend on :8787.
 frontend:
-	cd web/dashboard && bun install && SPARKBASE_API_URL=http://localhost:8787 bun run dev
+	cd apps/dashboard && bun install && SPARKBASE_API_URL=http://localhost:8787 bun run dev
 
 # Stop the local Postgres and Redis.
 stop:

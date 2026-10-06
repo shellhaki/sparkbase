@@ -34,11 +34,11 @@ jobs:
         working-directory: server
         run: PATH=/usr/lib/postgresql/18/bin:$PATH SB_REQUIRE_GARAGE=1 make test
       - name: SDK tests
-        working-directory: sdk/js
+        working-directory: packages/sdk-js
         run: bun install && bun run typecheck && PATH=/usr/lib/postgresql/18/bin:$PATH ../../scripts/with-server.sh bun test
       - name: Dashboard build and smoke test
         run: |
-          cd web/dashboard && bun install && bun run build && cd ../..
+          cd apps/dashboard && bun install && bun run build && cd ../..
           PATH=/usr/lib/postgresql/18/bin:$PATH scripts/with-server.sh scripts/e2e-dashboard.sh
 
   docker-install:

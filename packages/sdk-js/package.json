@@ -30,6 +30,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/shellhaki/sparkbase",
-    "directory": "sdk/js"
+    "directory": "packages/sdk-js"
   }
 }

@@ -3,5 +3,5 @@
   "private": true,
   "type": "module",
   "scripts": { "start": "node --env-file=.env index.mjs" },
-  "dependencies": { "@sparkbase/sdk": "file:../../sdk/js" }
+  "dependencies": { "@sparkbase/sdk": "file:../../packages/sdk-js" }
 }
