@@ -147,3 +147,10 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Sparkbase local
+.dev/
+.env
+.env.local
+/server/bin/
+.next/
