@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/*
+ * Sparkbase palette, shared with the landing page (waitlist/app/globals.css).
+ * Dark is the default; light follows prefers-color-scheme.
+ */
+:root {
+  --brand: #2d57fb;
+  --brand-hover: #4a6dfc;
+  --on-brand: #ffffff;
+
+  --background: #0a0a0b;
+  --foreground: #f5f5f2;
+  --card: #141416;
+  --muted: #1c1c20;
+  --muted-foreground: #9a9aa2;
+  --accent: #232328;
+  --border: #1f1f24;
+  --input: #26262c;
+  --destructive: #ff7a7a;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --code-bg: #0f0f12;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --brand-hover: #1f47e6;
+    --background: #ffffff;
+    --foreground: #0b0b0d;
+    --card: #f6f6f8;
+    --muted: #ececf0;
+    --muted-foreground: #55555e;
+    --accent: #e6e6eb;
+    --border: #e4e4e9;
+    --input: #dcdce2;
+    --destructive: #c0262d;
+    --success: #15803d;
+    --warning: #b45309;
+    --code-bg: #f3f3f6;
+    color-scheme: light;
+  }
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-on-brand: var(--on-brand);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-code: var(--code-bg);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+* {
+  border-color: var(--border);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
