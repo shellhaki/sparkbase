@@ -1,0 +1,39 @@
+# HTTPS routes for the dashboard, the API (including every project URL) and
+# Garage's S3 endpoint. Native Postgres and Redis routes come from the API's
+# /internal/traefik/config endpoint, one per running service.
+{{ $domain := env "SPARKBASE_DOMAIN" }}
+{{ $mode := env "TLS_MODE" }}
+http:
+  routers:
+    dashboard:
+      rule: Host(`app.{{ $domain }}`)
+      entryPoints: [websecure]
+      service: dashboard
+      tls:{{ if hasPrefix "acme" $mode }}
+        certResolver: le{{ else }} {}{{ end }}
+    api:
+      rule: Host(`api.{{ $domain }}`) && !PathPrefix(`/internal`) && !Path(`/metrics`)
+      entryPoints: [websecure]
+      service: api
+      tls:{{ if hasPrefix "acme" $mode }}
+        certResolver: le{{ else }} {}{{ end }}
+    s3:
+      rule: Host(`s3.{{ $domain }}`)
+      entryPoints: [websecure]
+      service: s3
+      tls:{{ if hasPrefix "acme" $mode }}
+        certResolver: le{{ else }} {}{{ end }}
+  services:
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: http://dashboard:3000
+    api:
+      loadBalancer:
+        servers:
+          - url: http://api:8787
+    s3:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: http://garage:3900

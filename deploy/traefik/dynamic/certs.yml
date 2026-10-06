@@ -1,0 +1,8 @@
+# TLS_MODE=custom: put fullchain and key files in deploy/traefik/certs and
+# list them here. Unused in the ACME and selfsigned modes.
+{{ if eq (env "TLS_MODE") "custom" }}
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/fullchain.pem
+      keyFile: /etc/traefik/certs/privkey.pem
+{{ end }}

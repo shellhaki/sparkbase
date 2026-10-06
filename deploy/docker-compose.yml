@@ -1,0 +1,209 @@
+# Sparkbase single-host install.
+#
+#   cp .env.example .env && ./generate-secrets.sh   # then set SPARKBASE_DOMAIN, TLS_MODE, ACME_EMAIL
+#   docker compose up -d
+#
+# Only Traefik publishes ports. Everything else stays on internal networks.
+
+name: sparkbase
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  traefik:
+    <<: *restart
+    image: traefik:v3.7
+    profiles: [traefik]
+    entrypoint: ["/bin/sh", "/etc/traefik/start.sh"]
+    environment:
+      SPARKBASE_DOMAIN: ${SPARKBASE_DOMAIN}
+      TLS_MODE: ${TLS_MODE:-acme-http}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      ACME_DNS_PROVIDER: ${ACME_DNS_PROVIDER:-}
+      ACME_CA_SERVER: ${ACME_CA_SERVER:-}
+      TRAEFIK_CONFIG_TOKEN: ${TRAEFIK_CONFIG_TOKEN}
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${PG_PORT:-5432}:5432"
+      - "${PG_POOLED_PORT:-6432}:6432"
+      - "${REDIS_TLS_PORT:-6380}:6380"
+    volumes:
+      - ./traefik/start.sh:/etc/traefik/start.sh:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/certs:/etc/traefik/certs:ro
+      - letsencrypt:/letsencrypt
+    networks: [web, data]
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    <<: *restart
+    image: ghcr.io/shellhaki/sparkbase-server:${SPARKBASE_VERSION:-latest}
+    build: ../server
+    environment:
+      SPARKBASE_DOMAIN: ${SPARKBASE_DOMAIN}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://api.${SPARKBASE_DOMAIN}}
+      DASHBOARD_URL: ${DASHBOARD_URL:-https://app.${SPARKBASE_DOMAIN}}
+      DATABASE_URL: postgres://sparkbase:${CONTROL_DB_PASSWORD}@control-db:5432/sparkbase?sslmode=disable
+      REDIS_URL: redis://:${CONTROL_REDIS_PASSWORD}@control-redis:6379/0
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TRAEFIK_CONFIG_TOKEN: ${TRAEFIK_CONFIG_TOKEN}
+      TLS_MODE: ${TLS_MODE:-acme-http}
+      NATIVE_MODE: traefik
+      NATIVE_PG_PORT: ${PG_PORT:-5432}
+      NATIVE_PG_POOLED_PORT: ${PG_POOLED_PORT:-6432}
+      NATIVE_REDIS_PORT: ${REDIS_TLS_PORT:-6380}
+      BOOTSTRAP_PG_HOST: postgres://sb_admin:${PG_HOST_PASSWORD}@pg-host:5432/postgres?pooler=pgbouncer:6432
+      BOOTSTRAP_CACHE_HOST: redis://:${CACHE_HOST_PASSWORD}@cache-host:6379
+      BOOTSTRAP_STORAGE: garage://${GARAGE_ADMIN_TOKEN}@garage:3903?s3=http://garage:3900&public=${S3_PUBLIC_URL:-https://s3.${SPARKBASE_DOMAIN}}&region=garage
+      BACKUP_DIR: /var/lib/sparkbase/backups
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - backups:/var/lib/sparkbase/backups
+    networks: [web, control, data]
+    depends_on:
+      control-db: { condition: service_healthy }
+      control-redis: { condition: service_healthy }
+      pg-host: { condition: service_healthy }
+      cache-host: { condition: service_healthy }
+      garage: { condition: service_started }
+
+  dashboard:
+    <<: *restart
+    image: ghcr.io/shellhaki/sparkbase-dashboard:${SPARKBASE_VERSION:-latest}
+    build: ../web/dashboard
+    environment:
+      SPARKBASE_API_URL: http://api:8787
+    networks: [web]
+    depends_on: [api]
+
+  control-db:
+    <<: *restart
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: sparkbase
+      POSTGRES_PASSWORD: ${CONTROL_DB_PASSWORD}
+      POSTGRES_DB: sparkbase
+    volumes:
+      - control-db:/var/lib/postgresql
+    networks: [control]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "sparkbase", "-d", "sparkbase"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  control-redis:
+    <<: *restart
+    image: redis:8-alpine
+    command: ["redis-server", "--requirepass", "${CONTROL_REDIS_PASSWORD}", "--appendonly", "yes"]
+    volumes:
+      - control-redis:/data
+    networks: [control]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${CONTROL_REDIS_PASSWORD}", "--no-auth-warning", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Tenant Postgres (postgres, vector, queue and auth services), with pgvector.
+  pg-host:
+    <<: *restart
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: sb_admin
+      POSTGRES_PASSWORD: ${PG_HOST_PASSWORD}
+      POSTGRES_DB: postgres
+      PGBOUNCER_PASSWORD: ${PGBOUNCER_PASSWORD}
+    volumes:
+      - pg-host:/var/lib/postgresql
+      - ./hosts/postgres/init.sh:/docker-entrypoint-initdb.d/10-sparkbase.sh:ro
+    networks: [data]
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "sb_admin", "-d", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Transaction-mode pooler for the pooled port. Tenants log in through
+  # auth_query, so new roles work without config changes.
+  pgbouncer:
+    <<: *restart
+    image: edoburu/pgbouncer:v1.26.0-p0
+    environment:
+      DB_HOST: pg-host
+      DB_PORT: "5432"
+      DB_USER: sb_pgbouncer
+      DB_PASSWORD: ${PGBOUNCER_PASSWORD}
+      AUTH_TYPE: scram-sha-256
+      AUTH_USER: sb_pgbouncer
+      AUTH_DBNAME: postgres
+      AUTH_QUERY: SELECT usename, passwd FROM public.sb_pgbouncer_auth($$1)
+      POOL_MODE: transaction
+      LISTEN_PORT: "6432"
+      DEFAULT_POOL_SIZE: "20"
+      MAX_CLIENT_CONN: "2000"
+      ADMIN_USERS: sb_pgbouncer
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
+    networks: [data]
+    depends_on:
+      pg-host: { condition: service_healthy }
+
+  # Tenant Redis: one ACL user per cache service.
+  cache-host:
+    <<: *restart
+    image: redis:8-alpine
+    environment:
+      CACHE_HOST_PASSWORD: ${CACHE_HOST_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        [ -s /data/users.acl ] || echo "user default on >$$CACHE_HOST_PASSWORD ~* &* +@all" > /data/users.acl
+        exec redis-server --aclfile /data/users.acl --appendonly yes --dir /data --maxmemory-policy noeviction
+    volumes:
+      - cache-host:/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$CACHE_HOST_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Object storage: one bucket and one key per storage service.
+  garage:
+    <<: *restart
+    image: dxflrs/garage:v2.4.1
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    networks: [data, web]
+
+networks:
+  web: {}
+  control: { internal: true }
+  data: {}
+
+volumes:
+  letsencrypt: {}
+  backups: {}
+  control-db: {}
+  control-redis: {}
+  pg-host: {}
+  cache-host: {}
+  garage-meta: {}
+  garage-data: {}

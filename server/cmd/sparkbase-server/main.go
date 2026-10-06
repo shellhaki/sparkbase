@@ -20,7 +20,13 @@ import (
 	"github.com/shellhaki/sparkbase/server/internal/worker"
 )
 
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		fmt.Println("sparkbase-server", version)
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -62,7 +68,7 @@ func run() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			log.Info("api listening", "port", cfg.Port, "url", cfg.PublicAPIURL)
+			log.Info("api listening", "port", cfg.Port, "url", cfg.PublicAPIURL, "version", version)
 			if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Error("api stopped", "err", err.Error())
 				stop()

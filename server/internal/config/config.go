@@ -29,6 +29,10 @@ type Config struct {
 	BootstrapStorage   string
 	BackupDir          string
 	Mode               string // "all", "api" or "worker"
+	// Public ports of Traefik's TCP entrypoints, used in native connection strings.
+	NativePGPort       int
+	NativePGPooledPort int
+	NativeRedisPort    int
 	SecureCookies      bool
 	LogLevel           string
 }
@@ -78,6 +82,18 @@ func Load(getenv func(string) string) (*Config, error) {
 		}
 	}
 
+	for _, p := range []struct {
+		name string
+		def  string
+		dst  *int
+	}{{"NATIVE_PG_PORT", "5432", &c.NativePGPort}, {"NATIVE_PG_POOLED_PORT", "6432", &c.NativePGPooledPort}, {"NATIVE_REDIS_PORT", "6380", &c.NativeRedisPort}} {
+		v, err := strconv.Atoi(opt(p.name, p.def))
+		if err != nil || v <= 0 || v > 65535 {
+			problems = append(problems, p.name+" must be a port number")
+		}
+		*p.dst = v
+	}
+
 	port, err := strconv.Atoi(opt("PORT", "8787"))
 	if err != nil || port <= 0 || port > 65535 {
 		problems = append(problems, "PORT must be a number between 1 and 65535")
@@ -90,9 +106,9 @@ func Load(getenv func(string) string) (*Config, error) {
 		problems = append(problems, "NATIVE_MODE must be traefik or direct")
 	}
 	switch c.TLSMode {
-	case "acme-dns", "acme-http", "custom", "none":
+	case "acme-dns", "acme-http", "custom", "selfsigned", "none":
 	default:
-		problems = append(problems, "TLS_MODE must be acme-dns, acme-http, custom or none")
+		problems = append(problems, "TLS_MODE must be acme-dns, acme-http, custom, selfsigned or none")
 	}
 	switch c.Mode {
 	case "all", "api", "worker":

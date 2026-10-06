@@ -113,7 +113,7 @@ func (a *App) BootstrapHosts(ctx context.Context) error {
 		}
 		pass, _ := u.User.Password()
 		cfg := store.HostConfig{AdminUser: u.User.Username(), AdminDB: strings.TrimPrefix(u.Path, "/"),
-			PublicHost: u.Query().Get("public_host"), PgBinDir: u.Query().Get("pg_bin")}
+			PublicHost: u.Query().Get("public_host"), PgBinDir: u.Query().Get("pg_bin"), PoolerAddr: u.Query().Get("pooler")}
 		if p := u.Query().Get("public_port"); p != "" {
 			fmt.Sscanf(p, "%d", &cfg.PublicPort)
 		}

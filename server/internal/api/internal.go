@@ -28,6 +28,19 @@ func (s *Server) internalRoutes() {
 		if err != nil {
 			return err
 		}
+		// TLS settings per certificate mode: wildcard certificates through
+		// DNS-01, one certificate per hostname through HTTP-01, or the
+		// default/file certificates for custom and selfsigned.
+		tlsFor := func(wildcard string) map[string]any {
+			switch s.Cfg.TLSMode {
+			case "acme-dns":
+				return map[string]any{"certResolver": "le", "domains": []any{map[string]any{"main": wildcard}}}
+			case "acme-http":
+				return map[string]any{"certResolver": "le"}
+			}
+			return map[string]any{}
+		}
+		dbTLS, cacheTLS := tlsFor("*.db."+s.Cfg.Domain), tlsFor("*.cache."+s.Cfg.Domain)
 		routers := map[string]any{}
 		services := map[string]any{}
 		for i := range list {
@@ -43,16 +56,16 @@ func (s *Server) internalRoutes() {
 			id := strings.ReplaceAll(res.ID, "-", "")[:16]
 			switch res.Kind {
 			case "postgres", "vector":
-				routers["pg-"+id] = map[string]any{"entryPoints": []string{"postgres"}, "rule": sni, "service": "pgsvc-" + id, "tls": map[string]any{}}
+				routers["pg-"+id] = map[string]any{"entryPoints": []string{"postgres"}, "rule": sni, "service": "pgsvc-" + id, "tls": dbTLS}
 				services["pgsvc-"+id] = map[string]any{"loadBalancer": map[string]any{"servers": []any{map[string]string{"address": h.InternalAddr}}}}
 				pooled := h.InternalAddr
 				if h.Config.PoolerAddr != "" {
 					pooled = h.Config.PoolerAddr
 				}
-				routers["pgp-"+id] = map[string]any{"entryPoints": []string{"postgres-pooled"}, "rule": sni, "service": "pgpsvc-" + id, "tls": map[string]any{}}
+				routers["pgp-"+id] = map[string]any{"entryPoints": []string{"postgres-pooled"}, "rule": sni, "service": "pgpsvc-" + id, "tls": dbTLS}
 				services["pgpsvc-"+id] = map[string]any{"loadBalancer": map[string]any{"servers": []any{map[string]string{"address": pooled}}}}
 			case "cache":
-				routers["rd-"+id] = map[string]any{"entryPoints": []string{"redis"}, "rule": sni, "service": "rdsvc-" + id, "tls": map[string]any{}}
+				routers["rd-"+id] = map[string]any{"entryPoints": []string{"redis"}, "rule": sni, "service": "rdsvc-" + id, "tls": cacheTLS}
 				services["rdsvc-"+id] = map[string]any{"loadBalancer": map[string]any{"servers": []any{map[string]string{"address": h.InternalAddr}}}}
 			}
 		}

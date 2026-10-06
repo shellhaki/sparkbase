@@ -512,12 +512,12 @@ func (a *App) NativeAddr(r *store.Resource, h *store.Host, pooled bool) (host st
 	if a.Cfg.NativeMode == "traefik" {
 		switch r.Kind {
 		case "cache":
-			return a.endpointName(r), 6380, true
+			return a.endpointName(r), a.Cfg.NativeRedisPort, true
 		default:
 			if pooled {
-				return a.endpointName(r), 6432, true
+				return a.endpointName(r), a.Cfg.NativePGPooledPort, true
 			}
-			return a.endpointName(r), 5432, true
+			return a.endpointName(r), a.Cfg.NativePGPort, true
 		}
 	}
 	host, portStr, err := net.SplitHostPort(h.InternalAddr)
