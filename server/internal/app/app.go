@@ -16,7 +16,9 @@ import (
 	"github.com/shellhaki/sparkbase/server/internal/config"
 	"github.com/shellhaki/sparkbase/server/internal/core"
 	"github.com/shellhaki/sparkbase/server/internal/db"
+	"github.com/shellhaki/sparkbase/server/internal/dockerx"
 	"github.com/shellhaki/sparkbase/server/internal/drivers"
+	"github.com/shellhaki/sparkbase/server/internal/engine"
 	"github.com/shellhaki/sparkbase/server/internal/mail"
 	"github.com/shellhaki/sparkbase/server/internal/sbcrypto"
 	"github.com/shellhaki/sparkbase/server/internal/store"
@@ -35,6 +37,8 @@ type App struct {
 	Counter *core.Counter
 	Tenants *tenant.Pools
 	Metrics *Metrics
+	// Engine runs services in their own containers; nil in shared mode.
+	Engine *engine.Engine
 	// Now is the clock; tests may replace it.
 	Now func() time.Time
 }
@@ -90,6 +94,15 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, mailer mail.
 		Tenants: tenant.New(st, box),
 		Metrics: NewMetrics(),
 		Now:     time.Now,
+	}
+	if cfg.Engine == "containers" {
+		dc := dockerx.New(dockerx.SocketPath())
+		if err := dc.Ping(ctx); err != nil {
+			a.Close()
+			return nil, fmt.Errorf("ENGINE=containers needs Docker: %w", err)
+		}
+		a.Engine = &engine.Engine{Docker: dc, Network: cfg.DockerNetwork, InDocker: engine.InsideDocker(), ProxyBase: cfg.ProxyBase, Box: box, Store: st}
+		a.Tenants.Resolve = a.resolveHost
 	}
 	if err := a.BootstrapHosts(ctx); err != nil {
 		a.Close()
@@ -223,11 +236,64 @@ func (a *App) BootstrapHost(ctx context.Context, h *store.Host) error {
 	return a.Store.MarkHostBootstrapped(ctx, h.ID)
 }
 
+// IsControlKind reports kinds that live in the control plane: no host, no
+// container, no credentials.
+func IsControlKind(kind string) bool {
+	switch kind {
+	case "realtime", "cron", "backup", "monitor":
+		return true
+	}
+	return false
+}
+
+func (a *App) provisionControl(ctx context.Context, r *store.Resource) error {
+	if err := a.Store.SetRuntime(ctx, r.ID, "control"); err != nil {
+		return err
+	}
+	if _, err := a.Store.TransitionResource(ctx, r.ID, "active", "provisioning"); err != nil {
+		return err
+	}
+	a.audit(ctx, "", r, "resource.provisioned", map[string]any{"runtime": "control"})
+	return nil
+}
+
+// Awake makes sure a container service is running. Shared services always are.
+func (a *App) Awake(ctx context.Context, r *store.Resource) error {
+	if r.Runtime != "container" || a.Engine == nil {
+		return nil
+	}
+	return a.Engine.Wake(ctx, r)
+}
+
+// resolveHost gives the tenant pools a running container's address.
+func (a *App) resolveHost(ctx context.Context, r *store.Resource) (*store.Host, error) {
+	if r.Runtime != "container" {
+		return nil, nil
+	}
+	if err := a.Engine.Wake(ctx, r); err != nil {
+		return nil, err
+	}
+	return a.Engine.Host(r), nil
+}
+
 // Target loads what a driver needs to act on a service.
 func (a *App) Target(ctx context.Context, r *store.Resource) (*drivers.Target, drivers.Driver, error) {
 	d, err := a.Drivers.Get(r.Kind)
 	if err != nil {
 		return nil, nil, err
+	}
+	if r.Runtime == "container" && a.Engine != nil {
+		secret, err := a.Engine.AdminSecret(r)
+		if err != nil {
+			return nil, nil, err
+		}
+		state := map[string]any{}
+		if len(r.ProvisionState) > 0 {
+			_ = json.Unmarshal(r.ProvisionState, &state)
+		}
+		id := r.ID
+		return &drivers.Target{R: r, H: a.Engine.Host(r), AdminSecret: secret, Limits: r.Limits, State: state,
+			Save: func(s map[string]any) error { return a.Store.SetProvisionState(context.Background(), id, s) }}, d, nil
 	}
 	if r.HostID == nil {
 		return nil, nil, fmt.Errorf("service %s has no host", r.ID)

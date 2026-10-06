@@ -192,6 +192,7 @@ func (s *Server) adminRoutes() {
 			ResourceCap        *int  `json:"resourceCap"`
 			MembersChangePlans *bool `json:"membersChangePlans"`
 			RotationGraceSecs  *int  `json:"rotationGraceSeconds"`
+			IdleMinutes        *int  `json:"idleMinutes"`
 		}
 		if err := httpx.Decode(r, &in, 0); err != nil {
 			return err
@@ -218,6 +219,12 @@ func (s *Server) adminRoutes() {
 				return httpx.Invalid("rotationGraceSeconds must be 0 to 604800")
 			}
 			set["rotation_grace_seconds"] = *in.RotationGraceSecs
+		}
+		if in.IdleMinutes != nil {
+			if *in.IdleMinutes < 0 || *in.IdleMinutes > 1440 {
+				return httpx.Invalid("idleMinutes must be 0 (never sleep) to 1440")
+			}
+			set["idle_minutes"] = *in.IdleMinutes
 		}
 		for k, v := range set {
 			if err := s.Store.SetSetting(ctx, k, v); err != nil {

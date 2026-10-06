@@ -33,8 +33,15 @@ type Config struct {
 	NativePGPort       int
 	NativePGPooledPort int
 	NativeRedisPort    int
-	SecureCookies      bool
-	LogLevel           string
+	// Engine is "shared" (services on shared data hosts) or "containers"
+	// (one container per memory-heavy service, scaled to zero when idle).
+	Engine        string
+	DockerNetwork string
+	ProxyBase     int
+	// ActivatorHost is how Traefik reaches the activator ports.
+	ActivatorHost string
+	SecureCookies bool
+	LogLevel      string
 }
 
 // Load builds a Config from getenv and returns one error that lists every problem.
@@ -71,6 +78,17 @@ func Load(getenv func(string) string) (*Config, error) {
 		BackupDir:          opt("BACKUP_DIR", ""),
 		Mode:               opt("SPARKBASE_MODE", "all"),
 		LogLevel:           opt("LOG_LEVEL", "info"),
+		Engine:             opt("ENGINE", "shared"),
+		DockerNetwork:      opt("DOCKER_NETWORK", ""),
+		ActivatorHost:      opt("ACTIVATOR_HOST", "api"),
+	}
+	if c.Engine != "shared" && c.Engine != "containers" {
+		problems = append(problems, "ENGINE must be shared or containers")
+	}
+	if pb, err := strconv.Atoi(opt("PROXY_BASE_PORT", "20000")); err != nil || pb < 1024 || pb > 60000 {
+		problems = append(problems, "PROXY_BASE_PORT must be between 1024 and 60000")
+	} else {
+		c.ProxyBase = pb
 	}
 
 	if key := need("ENCRYPTION_KEY"); key != "" {

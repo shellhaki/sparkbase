@@ -151,11 +151,14 @@ func (s *Server) vectorRoutes() {
 		if in.Dimension < 1 || in.Dimension > maxDim {
 			return httpx.Invalid(fmt.Sprintf("dimension must be 1 to %d on this plan", maxDim))
 		}
-		h, err := s.Tenants.Host(r.Context(), *res.HostID)
-		if err != nil {
-			return err
+		native := true
+		if res.HostID != nil {
+			h, err := s.Tenants.Host(r.Context(), *res.HostID)
+			if err != nil {
+				return err
+			}
+			native = h.Config.HasVector
 		}
-		native := h.Config.HasVector
 		ctx := r.Context()
 		tx, err := pool.Begin(ctx)
 		if err != nil {

@@ -117,6 +117,7 @@ func (s *Store) UpdatePlan(ctx context.Context, id string, name *string, limits 
 // Resources
 
 const resourceCols = `r.id, r.project_id, r.kind, r.name, r.plan_id, r.host_id, r.status, r.paused_before_suspend,
+	r.runtime, r.container_name, r.admin_secret_enc, r.proxy_port, r.settings,
 	r.external_name, r.endpoint, r.provision_state, r.write_locked, r.last_error, r.last_active_at, r.created_at,
 	p.slug as project_slug, p.owner_id, pl.limits`
 
@@ -272,4 +273,39 @@ func (s *Store) DueRevocations(ctx context.Context) ([]Credential, error) {
 func (s *Store) MarkCredentialRevoked(ctx context.Context, id string) error {
 	_, err := exec(ctx, s.q, `update resource_credentials set revoked_at = now() where id = $1`, id)
 	return err
+}
+
+// SetContainer records the container a service runs in.
+func (s *Store) SetContainer(ctx context.Context, id, name string, adminSecretEnc []byte, port int) error {
+	_, err := exec(ctx, s.q, `
+		update resources set runtime = 'container', container_name = $2, admin_secret_enc = $3, proxy_port = $4
+		where id = $1`, id, name, adminSecretEnc, port)
+	return err
+}
+
+func (s *Store) SetRuntime(ctx context.Context, id, runtime string) error {
+	_, err := exec(ctx, s.q, `update resources set runtime = $2 where id = $1`, id, runtime)
+	return err
+}
+
+// NextProxyPort hands out an unused internal port for the activator.
+func (s *Store) NextProxyPort(ctx context.Context, base int) (int, error) {
+	var p int
+	err := s.q.QueryRow(ctx, `
+		select coalesce(max(proxy_port) + 1, $1) from resources where proxy_port is not null`, base).Scan(&p)
+	return p, err
+}
+
+func (s *Store) SetResourceSettings(ctx context.Context, id string, settings any) error {
+	b, err := json.Marshal(settings)
+	if err != nil {
+		return err
+	}
+	_, err = exec(ctx, s.q, `update resources set settings = $2 where id = $1`, id, b)
+	return err
+}
+
+// ContainerResources returns services that run in containers.
+func (s *Store) ContainerResources(ctx context.Context) ([]Resource, error) {
+	return many[Resource](ctx, s.q, `select `+resourceCols+resourceFrom+`where r.runtime = 'container' and r.container_name is not null order by r.created_at`)
 }

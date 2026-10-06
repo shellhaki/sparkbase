@@ -118,6 +118,11 @@ type Resource struct {
 	HostID              *string         `db:"host_id" json:"-"`
 	Status              string          `db:"status" json:"status"`
 	PausedBeforeSuspend bool            `db:"paused_before_suspend" json:"-"`
+	Runtime             string          `db:"runtime" json:"runtime"`
+	ContainerName       *string         `db:"container_name" json:"-"`
+	AdminSecretEnc      []byte          `db:"admin_secret_enc" json:"-"`
+	ProxyPort           *int            `db:"proxy_port" json:"-"`
+	Settings            json.RawMessage `db:"settings" json:"settings"`
 	ExternalName        *string         `db:"external_name" json:"-"`
 	Endpoint            *string         `db:"endpoint" json:"endpoint"`
 	ProvisionState      json.RawMessage `db:"provision_state" json:"-"`
@@ -209,6 +214,9 @@ type Backup struct {
 	Error      *string    `db:"error" json:"error"`
 	CreatedAt  time.Time  `db:"created_at" json:"createdAt"`
 	FinishedAt *time.Time `db:"finished_at" json:"finishedAt"`
+	// Where the dump lives: "local" or "s3".
+	Destination   string  `db:"destination" json:"destination"`
+	ViaResourceID *string `db:"via_resource_id" json:"viaResourceId"`
 }
 
 type UsageSample struct {

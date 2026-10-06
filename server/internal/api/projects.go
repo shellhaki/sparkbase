@@ -525,9 +525,13 @@ func (s *Server) connectionInfo(ctx context.Context, res *store.Resource) (map[s
 	if err != nil {
 		return nil, err
 	}
-	h, err := s.Tenants.Host(ctx, *res.HostID)
-	if err != nil {
-		return nil, err
+	var h *store.Host
+	if res.Runtime == "container" && s.Engine != nil {
+		h = s.Engine.Host(res)
+	} else if res.HostID != nil {
+		if h, err = s.Tenants.Host(ctx, *res.HostID); err != nil {
+			return nil, err
+		}
 	}
 	switch res.Kind {
 	case "postgres", "vector":

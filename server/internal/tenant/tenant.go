@@ -39,6 +39,10 @@ type Pools struct {
 	Store *store.Store
 	Box   *sbcrypto.Box
 
+	// Resolve returns a container service's host, waking it first. A nil
+	// host means the service lives on a shared host.
+	Resolve func(ctx context.Context, r *store.Resource) (*store.Host, error)
+
 	mu    sync.Mutex
 	pg    map[string]*pgEntry
 	rd    map[string]*redisEntry
@@ -67,6 +71,20 @@ func (p *Pools) Host(ctx context.Context, id string) (*store.Host, error) {
 	return h, nil
 }
 
+// hostFor resolves where a service lives.
+func (p *Pools) hostFor(ctx context.Context, r *store.Resource) (*store.Host, error) {
+	if p.Resolve != nil {
+		h, err := p.Resolve(ctx, r)
+		if err != nil || h != nil {
+			return h, err
+		}
+	}
+	if r.HostID == nil {
+		return nil, fmt.Errorf("service has no host")
+	}
+	return p.Host(ctx, *r.HostID)
+}
+
 // TenantURL is the connection string the API uses to reach a Postgres-family
 // service over the internal network.
 func TenantURL(h *store.Host, db, user, password string) string {
@@ -84,6 +102,11 @@ func (p *Pools) PG(ctx context.Context, r *store.Resource) (*pgxpool.Pool, error
 	if err != nil {
 		return nil, fmt.Errorf("credentials: %w", err)
 	}
+	// Container services must be awake before a pooled connection is used.
+	h, err := p.hostFor(ctx, r)
+	if err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	e, ok := p.pg[r.ID]
 	if ok && e.credID == cred.ID {
@@ -92,14 +115,6 @@ func (p *Pools) PG(ctx context.Context, r *store.Resource) (*pgxpool.Pool, error
 		return e.pool, nil
 	}
 	p.mu.Unlock()
-
-	if r.HostID == nil {
-		return nil, fmt.Errorf("service has no host")
-	}
-	h, err := p.Host(ctx, *r.HostID)
-	if err != nil {
-		return nil, err
-	}
 	secret, err := p.Box.OpenString(cred.SecretEnc)
 	if err != nil {
 		return nil, err
@@ -135,6 +150,10 @@ func (p *Pools) Redis(ctx context.Context, r *store.Resource) (*redis.Client, er
 	if err != nil {
 		return nil, fmt.Errorf("credentials: %w", err)
 	}
+	h, err := p.hostFor(ctx, r)
+	if err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	if e, ok := p.rd[r.ID]; ok && e.credID == cred.ID {
 		e.used = time.Now()
@@ -142,13 +161,6 @@ func (p *Pools) Redis(ctx context.Context, r *store.Resource) (*redis.Client, er
 		return e.client, nil
 	}
 	p.mu.Unlock()
-	if r.HostID == nil {
-		return nil, fmt.Errorf("service has no host")
-	}
-	h, err := p.Host(ctx, *r.HostID)
-	if err != nil {
-		return nil, err
-	}
 	secret, err := p.Box.OpenString(cred.SecretEnc)
 	if err != nil {
 		return nil, err

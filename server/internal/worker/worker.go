@@ -244,6 +244,10 @@ func (w *Worker) registerDefaults() {
 		return a.Mail.Send(ctx, m)
 	})
 
+	w.Handle("scale_to_zero", func(ctx context.Context, _ json.RawMessage) error {
+		return a.ScaleToZero(ctx)
+	})
+	w.Every("scale_to_zero", time.Minute)
 	w.Every("revoke_expired_credentials", time.Minute)
 	w.Every("sample_usage", time.Minute)
 	w.Every("pause_inactive", time.Hour)

@@ -1,7 +1,11 @@
 package api
 
 import (
+	"net"
+	"strconv"
+
 	"crypto/subtle"
+	"github.com/shellhaki/sparkbase/server/internal/store"
 	"net/http"
 	"strings"
 
@@ -45,11 +49,20 @@ func (s *Server) internalRoutes() {
 		services := map[string]any{}
 		for i := range list {
 			res := &list[i]
-			if res.Endpoint == nil || *res.Endpoint == "" || res.HostID == nil {
+			if res.Endpoint == nil || *res.Endpoint == "" {
 				continue
 			}
-			h, err := s.Tenants.Host(ctx, *res.HostID)
-			if err != nil {
+			var h *store.Host
+			if res.Runtime == "container" && res.ProxyPort != nil {
+				// Container services go through the activator, which wakes them.
+				addr := net.JoinHostPort(s.Cfg.ActivatorHost, strconv.Itoa(*res.ProxyPort))
+				h = &store.Host{InternalAddr: addr}
+			} else if res.HostID != nil {
+				var err error
+				if h, err = s.Tenants.Host(ctx, *res.HostID); err != nil {
+					continue
+				}
+			} else {
 				continue
 			}
 			sni := "HostSNI(`" + *res.Endpoint + "`)"

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shellhaki/sparkbase/server/internal/engine"
 	"net"
 	"regexp"
 	"strconv"
@@ -27,6 +28,9 @@ type Settings struct {
 	ResourceCap        int  `json:"resourceCap"`
 	MembersChangePlans bool `json:"membersChangePlans"`
 	RotationGraceSecs  int  `json:"rotationGraceSeconds"`
+	// IdleMinutes is how long a container service may sit unused before it
+	// is stopped. 0 keeps containers running.
+	IdleMinutes int `json:"idleMinutes"`
 }
 
 func (a *App) Settings(ctx context.Context) (Settings, error) {
@@ -34,7 +38,7 @@ func (a *App) Settings(ctx context.Context) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	s := Settings{ResourceCap: 10, MembersChangePlans: true, RotationGraceSecs: 3600}
+	s := Settings{IdleMinutes: 10, ResourceCap: 10, MembersChangePlans: true, RotationGraceSecs: 3600}
 	get := func(k string, v any) {
 		if b, ok := raw[k]; ok {
 			_ = json.Unmarshal(b, v)
@@ -44,13 +48,14 @@ func (a *App) Settings(ctx context.Context) (Settings, error) {
 	get("resource_cap", &s.ResourceCap)
 	get("members_change_plans", &s.MembersChangePlans)
 	get("rotation_grace_seconds", &s.RotationGraceSecs)
+	get("idle_minutes", &s.IdleMinutes)
 	return s, nil
 }
 
 // CreateResource validates and inserts a service, then queues provisioning.
 func (a *App) CreateResource(ctx context.Context, actor *store.User, p *store.Project, kind, name, planID string) (*store.Resource, error) {
-	if _, err := a.Drivers.Get(kind); err != nil {
-		return nil, httpx.Invalid("kind must be one of postgres, cache, storage, vector, queue, auth")
+	if _, err := a.Drivers.Get(kind); err != nil && !IsControlKind(kind) {
+		return nil, httpx.Invalid("kind must be one of postgres, cache, storage, vector, queue, auth, realtime, cron, backup, monitor")
 	}
 	if !ValidName(name) {
 		return nil, httpx.Invalid("name must be 1 to 31 lowercase letters, digits or dashes, starting with a letter")
@@ -129,7 +134,27 @@ func (a *App) ProvisionResource(ctx context.Context, id string) error {
 	if r.Status != "provisioning" {
 		return nil
 	}
-	if r.HostID == nil {
+	if IsControlKind(r.Kind) {
+		return a.provisionControl(ctx, r)
+	}
+	if a.Engine != nil && engine.Uses(r.Kind) {
+		// One container per service: create it, start it, lock it down.
+		if err := a.Engine.Prepare(ctx, r); err != nil {
+			return err
+		}
+		if err := a.Engine.Ensure(ctx, r); err != nil {
+			return err
+		}
+		if r.Kind != "cache" {
+			secret, err := a.Engine.AdminSecret(r)
+			if err != nil {
+				return err
+			}
+			if _, err := drivers.BootstrapPGHost(ctx, a.Engine.Host(r), secret); err != nil {
+				return err
+			}
+		}
+	} else if r.HostID == nil {
 		h, err := a.Store.PickHost(ctx, drivers.HostKindFor(r.Kind))
 		if errors.Is(err, store.ErrNotFound) {
 			return fmt.Errorf("no active %s host is registered", drivers.HostKindFor(r.Kind))
@@ -245,7 +270,13 @@ func (a *App) DeprovisionResource(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if r.HostID != nil {
+	switch {
+	case r.Runtime == "container" && a.Engine != nil:
+		// The container and its volume hold everything; removing them is enough.
+		if err := a.Engine.Destroy(ctx, r); err != nil {
+			return err
+		}
+	case r.HostID != nil:
 		t, d, err := a.Target(ctx, r)
 		if err != nil {
 			return err
@@ -299,6 +330,17 @@ func (a *App) SetPaused(ctx context.Context, actorID string, r *store.Resource, 
 }
 
 func (a *App) applyPause(ctx context.Context, r *store.Resource, pause bool) error {
+	if IsControlKind(r.Kind) {
+		return nil
+	}
+	if r.Runtime == "container" && a.Engine != nil {
+		// A paused container is stopped and the activator refuses to wake it.
+		if pause {
+			a.Tenants.Invalidate(r.ID)
+			return a.Engine.Sleep(ctx, r)
+		}
+		return nil
+	}
 	t, d, err := a.Target(ctx, r)
 	if err != nil {
 		return err
@@ -359,6 +401,12 @@ func (a *App) Rotate(ctx context.Context, actorID string, r *store.Resource) err
 	if r.Status != "active" && r.Status != "paused" {
 		return httpx.NotReady(r.Status)
 	}
+	if IsControlKind(r.Kind) {
+		return httpx.Invalid(r.Kind + " services have no credentials to rotate")
+	}
+	if err := a.Awake(ctx, r); err != nil {
+		return err
+	}
 	t, d, err := a.Target(ctx, r)
 	if err != nil {
 		return err
@@ -409,6 +457,12 @@ func (a *App) RevokeDue(ctx context.Context) error {
 		if err != nil {
 			continue
 		}
+		if r.Runtime == "container" {
+			if running, _ := a.Engine.Running(ctx, r); !running {
+				// A stopped container drops the role on its next wake instead.
+				continue
+			}
+		}
 		t, d, err := a.Target(ctx, r)
 		if err != nil {
 			return err
@@ -448,7 +502,21 @@ func (a *App) ChangePlan(ctx context.Context, actorID string, r *store.Resource,
 		return err
 	}
 	r.PlanID, r.Limits = plan.ID, plan.Limits
-	if r.Status == "active" || r.Status == "paused" {
+	if r.Runtime == "container" && a.Engine != nil {
+		// Recreate the container with the new memory limit; data stays in the volume.
+		if running, _ := a.Engine.Running(ctx, r); running {
+			_ = a.Engine.Sleep(ctx, r)
+		}
+		_ = a.Engine.Docker.Remove(ctx, engine.ContainerName(r))
+	}
+	awake := true
+	if err := a.Awake(ctx, r); err != nil {
+		if r.Status == "active" {
+			return err
+		}
+		awake = false // a paused container picks the limits up on its next start
+	}
+	if awake && !IsControlKind(r.Kind) && (r.Status == "active" || r.Status == "paused") {
 		t, d, err := a.Target(ctx, r)
 		if err != nil {
 			return err
@@ -519,6 +587,10 @@ func (a *App) NativeAddr(r *store.Resource, h *store.Host, pooled bool) (host st
 			}
 			return a.endpointName(r), a.Cfg.NativePGPort, true
 		}
+	}
+	if r.Runtime == "container" && r.ProxyPort != nil {
+		// Without Traefik, clients connect to the activator on this machine.
+		return "127.0.0.1", *r.ProxyPort, false
 	}
 	host, portStr, err := net.SplitHostPort(h.InternalAddr)
 	if err != nil {

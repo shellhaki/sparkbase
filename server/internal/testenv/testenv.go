@@ -23,6 +23,8 @@ import (
 	"github.com/shellhaki/sparkbase/server/internal/api"
 	"github.com/shellhaki/sparkbase/server/internal/app"
 	"github.com/shellhaki/sparkbase/server/internal/config"
+	"github.com/shellhaki/sparkbase/server/internal/dockerx"
+	"github.com/shellhaki/sparkbase/server/internal/engine"
 	"github.com/shellhaki/sparkbase/server/internal/logx"
 	"github.com/shellhaki/sparkbase/server/internal/mail"
 	"github.com/shellhaki/sparkbase/server/internal/sbcrypto"
@@ -72,6 +74,21 @@ func WithGarage() Option {
 		}
 		res.Body.Close()
 		vars["BOOTSTRAP_STORAGE"] = GarageURL
+	}
+}
+
+// WithContainers runs memory-heavy services in their own Docker containers.
+func WithContainers() Option {
+	return func(vars map[string]string, t *testing.T) {
+		if err := dockerx.New(dockerx.SocketPath()).Ping(context.Background()); err != nil {
+			if os.Getenv("SB_REQUIRE_DOCKER") == "1" {
+				t.Fatalf("docker is not running: %v", err)
+			}
+			t.Skip("docker is not running")
+		}
+		vars["ENGINE"] = "containers"
+		// A distinct port range per test run so parallel packages do not clash.
+		vars["PROXY_BASE_PORT"] = fmt.Sprint(30000 + int(sbcrypto.RandomBytes(1)[0])*80)
 	}
 }
 
@@ -135,6 +152,12 @@ func New(t *testing.T, opts ...Option) *Env {
 	h := s.Handler()
 	handler.Store(&h)
 
+	if a.Engine != nil {
+		act := &engine.Activator{Engine: a.Engine, Store: a.Store, Redis: a.Redis, Prefix: cfg.RedisPrefix, Log: log, BindHost: "127.0.0.1"}
+		actCtx, actCancel := context.WithCancel(ctx)
+		go act.Run(actCtx)
+		t.Cleanup(actCancel)
+	}
 	w := worker.New(a)
 	w.PollInterval = 20 * time.Millisecond
 	w.Concurrency = 2
@@ -338,7 +361,8 @@ func (e *Env) Service(c *Client, p *Project, kind, name string) string {
 
 func (e *Env) WaitStatus(c *Client, id, status string) *Resp {
 	e.T.Helper()
-	deadline := time.Now().Add(30 * time.Second)
+	// Container services may pull an image on first use.
+	deadline := time.Now().Add(5 * time.Minute)
 	for {
 		res := c.Do("GET", "/v1/resources/"+id, nil)
 		if res.Str("resource", "status") == status {

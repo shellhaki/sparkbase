@@ -18,6 +18,7 @@ import (
 	"github.com/shellhaki/sparkbase/server/internal/app"
 	"github.com/shellhaki/sparkbase/server/internal/config"
 	"github.com/shellhaki/sparkbase/server/internal/db"
+	"github.com/shellhaki/sparkbase/server/internal/engine"
 	"github.com/shellhaki/sparkbase/server/internal/logx"
 	"github.com/shellhaki/sparkbase/server/internal/sbcrypto"
 	"github.com/shellhaki/sparkbase/server/internal/store"
@@ -71,6 +72,16 @@ func run() error {
 			// Until the first account exists, whoever signs up first becomes
 			// the admin, so finish setup right after starting.
 			fmt.Fprintf(os.Stdout, "\n  Sparkbase has no admin yet.\n  Open %s/setup now to create the admin account.\n\n", cfg.DashboardURL)
+		}
+		if a.Engine != nil {
+			bind := "127.0.0.1"
+			if a.Engine.InDocker {
+				bind = "0.0.0.0"
+			}
+			act := &engine.Activator{Engine: a.Engine, Store: a.Store, Redis: a.Redis, Prefix: cfg.RedisPrefix, Log: log, BindHost: bind}
+			wg.Add(1)
+			go func() { defer wg.Done(); act.Run(ctx) }()
+			log.Info("container engine on", "network", cfg.DockerNetwork, "inDocker", a.Engine.InDocker)
 		}
 		hs := &http.Server{
 			Addr: ":" + strconv.Itoa(cfg.Port), Handler: srv.Handler(),

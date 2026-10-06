@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/shellhaki/sparkbase/server/internal/engine"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,6 +38,28 @@ func (a *App) SampleUsage(ctx context.Context) error {
 }
 
 func (a *App) sampleOne(ctx context.Context, r *store.Resource, now time.Time) error {
+	if IsControlKind(r.Kind) {
+		n, _ := a.Counter.Get(ctx, r.ID)
+		return a.Store.InsertUsage(ctx, r.ID, now, map[string]int64{"requests_month": n})
+	}
+	extra := map[string]int64{}
+	if r.Runtime == "container" && a.Engine != nil {
+		running, err := a.Engine.Running(ctx, r)
+		if err != nil {
+			return err
+		}
+		if !running {
+			// Asleep: no memory used, and measuring would wake it.
+			n, _ := a.Counter.Get(ctx, r.ID)
+			return a.Store.InsertUsage(ctx, r.ID, now, map[string]int64{"awake": 0, "container_memory_bytes": 0, "requests_month": n})
+		}
+		if st, err := a.Engine.Docker.Stats(ctx, engine.ContainerName(r)); err == nil {
+			extra["awake"] = 1
+			extra["container_memory_bytes"] = st.MemoryBytes
+			extra["container_memory_limit"] = st.MemoryLimit
+			extra["cpu_permille"] = int64(st.CPUPercent * 10)
+		}
+	}
 	t, d, err := a.Target(ctx, r)
 	if err != nil {
 		return err
@@ -47,6 +70,9 @@ func (a *App) sampleOne(ctx context.Context, r *store.Resource, now time.Time) e
 	}
 	if n, err := a.Counter.Get(ctx, r.ID); err == nil {
 		usage["requests_month"] = n
+	}
+	for k, v := range extra {
+		usage[k] = v
 	}
 	if err := a.Store.InsertUsage(ctx, r.ID, now, usage); err != nil {
 		return err
@@ -112,6 +138,9 @@ func (a *App) EnforceLimits(ctx context.Context, r *store.Resource, usage map[st
 
 // SetWriteLock applies or lifts the write lock on the engine and records it.
 func (a *App) SetWriteLock(ctx context.Context, r *store.Resource, locked bool) error {
+	if err := a.Awake(ctx, r); err != nil {
+		return err
+	}
 	t, d, err := a.Target(ctx, r)
 	if err != nil {
 		return err
@@ -126,6 +155,53 @@ func (a *App) SetWriteLock(ctx context.Context, r *store.Resource, locked bool) 
 	r.WriteLocked = locked
 	a.Tenants.Invalidate(r.ID)
 	return a.Store.SetWriteLocked(ctx, r.ID, locked)
+}
+
+// ScaleToZero stops container services nobody used for the idle period.
+// The next connection or API call starts them again.
+func (a *App) ScaleToZero(ctx context.Context) error {
+	if a.Engine == nil {
+		return nil
+	}
+	s, err := a.Settings(ctx)
+	if err != nil {
+		return err
+	}
+	list, err := a.Store.ContainerResources(ctx)
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		r := &list[i]
+		running, err := a.Engine.Running(ctx, r)
+		if err != nil || !running {
+			continue
+		}
+		if r.Status == "paused" || r.Status == "suspended" {
+			_ = a.Engine.Sleep(ctx, r)
+			continue
+		}
+		if s.IdleMinutes <= 0 || r.Status != "active" {
+			continue
+		}
+		if engine.ActiveConns(ctx, a.Redis, a.Cfg.RedisPrefix, r.ID) > 0 {
+			continue
+		}
+		last := r.CreatedAt
+		if r.LastActiveAt != nil {
+			last = *r.LastActiveAt
+		}
+		if a.Now().Sub(last) < time.Duration(s.IdleMinutes)*time.Minute {
+			continue
+		}
+		a.Tenants.Invalidate(r.ID)
+		if err := a.Engine.Sleep(ctx, r); err != nil {
+			a.Log.Warn("scale to zero", "resource", r.ID, "err", err.Error())
+			continue
+		}
+		a.audit(ctx, "", r, "resource.sleep", map[string]any{"idleMinutes": s.IdleMinutes})
+	}
+	return nil
 }
 
 // PauseInactive pauses services idle for longer than the admin setting.
@@ -209,6 +285,9 @@ func (a *App) RunBackup(ctx context.Context, resourceID, backupID string) error 
 		_ = a.Store.FailBackup(ctx, backupID, err.Error())
 		return nil
 	}
+	if err := a.Awake(ctx, r); err != nil {
+		return fail(err)
+	}
 	t, _, err := a.Target(ctx, r)
 	if err != nil {
 		return fail(err)
@@ -266,6 +345,9 @@ func (a *App) RestoreBackup(ctx context.Context, actorID string, r *store.Resour
 	dump, err := a.Box.Open(sealed)
 	if err != nil {
 		return fmt.Errorf("decrypt backup: %w", err)
+	}
+	if err := a.Awake(ctx, r); err != nil {
+		return err
 	}
 	t, _, err := a.Target(ctx, r)
 	if err != nil {

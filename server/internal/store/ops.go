@@ -226,10 +226,19 @@ func (s *Store) PruneUsage(ctx context.Context, olderThan time.Duration) error {
 
 // Backups
 
-const backupCols = `id, resource_id, status, object_key, size_bytes, checksum, expires_at, error, created_at, finished_at`
+const backupCols = `id, resource_id, status, object_key, size_bytes, checksum, expires_at, error, created_at, finished_at, destination, via_resource_id`
 
 func (s *Store) CreateBackup(ctx context.Context, resourceID string) (*Backup, error) {
 	return one[Backup](ctx, s.q, `insert into backups (resource_id) values ($1) returning `+backupCols, resourceID)
+}
+
+// CreateBackupVia records a backup taken by a backup service.
+func (s *Store) CreateBackupVia(ctx context.Context, resourceID, viaID, destination string) (*Backup, error) {
+	return one[Backup](ctx, s.q, `insert into backups (resource_id, via_resource_id, destination) values ($1, $2, $3) returning `+backupCols, resourceID, viaID, destination)
+}
+
+func (s *Store) ListBackupsVia(ctx context.Context, viaID string, limit int) ([]Backup, error) {
+	return many[Backup](ctx, s.q, `select `+backupCols+` from backups where via_resource_id = $1 order by created_at desc limit $2`, viaID, limit)
 }
 
 func (s *Store) FinishBackup(ctx context.Context, id, key string, size int64, checksum string, expires time.Time) error {
