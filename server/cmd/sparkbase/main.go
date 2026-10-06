@@ -1,0 +1,16 @@
+// Command sparkbase is the command line client for a Sparkbase install.
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/shellhaki/sparkbase/server/internal/cli"
+)
+
+func main() {
+	if err := cli.New().Run(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+}
