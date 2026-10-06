@@ -21,6 +21,8 @@ PUBLIC_API_URL=https://api.sparkbase.localhost:8443
 DASHBOARD_URL=https://app.sparkbase.localhost:8443
 S3_PUBLIC_URL=https://s3.sparkbase.localhost:8443
 SPARKBASE_VERSION=e2e
+SPARKBASE_DATA_NETWORK=sparkbase-e2e_data
+ENGINE=containers
 ENCRYPTION_KEY=$(openssl rand -base64 32)
 TRAEFIK_CONFIG_TOKEN=$(openssl rand -hex 24)
 CONTROL_DB_PASSWORD=$(openssl rand -hex 24)
@@ -34,6 +36,9 @@ EOF
 DC=(docker compose -p sparkbase-e2e --env-file "$ENV")
 cleanup() {
   if [ -z "${KEEP:-}" ]; then
+    # Service containers are created by Sparkbase, not compose: remove them first.
+    docker ps -aq --filter label=sparkbase.network=sparkbase-e2e_data | xargs -r docker rm -f >/dev/null 2>&1 || true
+    docker volume ls -q --filter label=sparkbase.network=sparkbase-e2e_data | xargs -r docker volume rm -f >/dev/null 2>&1 || true
     "${DC[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
     rm -f "$ENV"
   fi

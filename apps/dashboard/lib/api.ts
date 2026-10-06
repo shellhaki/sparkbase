@@ -105,6 +105,10 @@ export const KIND_LABEL: Record<string, string> = {
   vector: "Vector",
   queue: "Queues",
   auth: "Auth",
+  realtime: "Realtime",
+  cron: "Cron",
+  backup: "Backups",
+  monitor: "Monitor",
 };
 
 export const KIND_BLURB: Record<string, string> = {
@@ -114,4 +118,8 @@ export const KIND_BLURB: Record<string, string> = {
   vector: "Collections of embeddings with similarity search (pgvector).",
   queue: "Durable queues with visibility timeouts, retries and dead letters.",
   auth: "Email and password sign-in for your app's users, with JWT sessions.",
+  realtime: "Channels pushed to browsers and servers, plus live Postgres table changes.",
+  cron: "Scheduled jobs that call a URL, run SQL or enqueue a message.",
+  backup: "Scheduled backups of your databases, kept locally or in your own S3 bucket.",
+  monitor: "Uptime checks for your endpoints, with alerts when they go down.",
 };

@@ -123,7 +123,7 @@ func (e *Engine) AdminSecret(r *store.Resource) (string, error) {
 
 func (e *Engine) spec(r *store.Resource, secret string) dockerx.Spec {
 	limits := r.Limits
-	labels := map[string]string{"sparkbase": "1", "sparkbase.resource": r.ID, "sparkbase.kind": r.Kind, "sparkbase.project": r.ProjectSlug}
+	labels := map[string]string{"sparkbase": "1", "sparkbase.resource": r.ID, "sparkbase.kind": r.Kind, "sparkbase.project": r.ProjectSlug, "sparkbase.network": e.Network}
 	mem := limits.Get("memory_mb")
 	s := dockerx.Spec{Name: ContainerName(r), Labels: labels, Network: e.Network, Volume: volumeName(r)}
 	if !e.InDocker {

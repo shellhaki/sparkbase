@@ -220,15 +220,9 @@ func TestComposeInstall(t *testing.T) {
 		if fmt.Sprint(get(r, "matches")) == "[]" {
 			t.Fatal("no vector match")
 		}
-		hosts := a.must(200, "GET", apiURL+"/v1/admin/hosts", nil)
-		found := false
-		for _, h := range hosts["hosts"].([]any) {
-			if get(h.(map[string]any), "config", "hasVector") == true {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatal("pg host does not report pgvector")
+		vr := a.must(200, "GET", apiURL+"/v1/resources/"+ids["vector"], nil)
+		if str(vr, "resource", "runtime") != "container" {
+			t.Fatalf("vector runtime: %v", vr)
 		}
 	})
 
@@ -320,6 +314,35 @@ func TestComposeInstall(t *testing.T) {
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
+	})
+
+	t.Run("idle containers stop and wake on connect", func(t *testing.T) {
+		a.must(200, "PATCH", apiURL+"/v1/admin/settings", map[string]any{"idleMinutes": 1})
+		conn := a.must(200, "GET", apiURL+"/v1/resources/"+ids["postgres"]+"/connection", nil)
+		cfg, _ := pgx.ParseConfig(str(conn, "native", "url"))
+		cfg.TLSConfig.ServerName = cfg.Host
+		cfg.LookupFunc = func(ctx context.Context, host string) ([]string, error) { return []string{"127.0.0.1"}, nil }
+		// Wait for the reaper: idle for over a minute, checked every minute.
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			m := a.must(200, "GET", apiURL+"/v1/resources/"+ids["postgres"]+"/metrics?minutes=5", nil)
+			if m["awake"] == false {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("the container never went to sleep")
+			}
+			time.Sleep(5 * time.Second)
+		}
+		start := time.Now()
+		cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		c, err := pgx.ConnectConfig(cctx, cfg)
+		if err != nil {
+			t.Fatalf("wake on connect: %v", err)
+		}
+		c.Close(ctx)
+		t.Logf("cold start through Traefik: %s", time.Since(start).Round(time.Millisecond))
 	})
 
 	t.Run("pause removes the Traefik route", func(t *testing.T) {

@@ -58,24 +58,30 @@ services:
       TRAEFIK_CONFIG_TOKEN: ${TRAEFIK_CONFIG_TOKEN}
       TLS_MODE: ${TLS_MODE:-acme-http}
       NATIVE_MODE: traefik
+      # One container per database and cache service, stopped when idle.
+      ENGINE: ${ENGINE:-containers}
+      DOCKER_NETWORK: ${SPARKBASE_DATA_NETWORK:-sparkbase_data}
+      ACTIVATOR_HOST: api
       NATIVE_PG_PORT: ${PG_PORT:-5432}
       NATIVE_PG_POOLED_PORT: ${PG_POOLED_PORT:-6432}
       NATIVE_REDIS_PORT: ${REDIS_TLS_PORT:-6380}
-      BOOTSTRAP_PG_HOST: postgres://sb_admin:${PG_HOST_PASSWORD}@pg-host:5432/postgres?pooler=pgbouncer:6432
-      BOOTSTRAP_CACHE_HOST: redis://:${CACHE_HOST_PASSWORD}@cache-host:6379
+      # Shared hosts are only used with ENGINE=shared (profile shared-hosts).
+      BOOTSTRAP_PG_HOST: ${BOOTSTRAP_PG_HOST:-}
+      BOOTSTRAP_CACHE_HOST: ${BOOTSTRAP_CACHE_HOST:-}
       BOOTSTRAP_STORAGE: garage://${GARAGE_ADMIN_TOKEN}@garage:3903?s3=http://garage:3900&public=${S3_PUBLIC_URL:-https://s3.${SPARKBASE_DOMAIN}}&region=garage
       BACKUP_DIR: /var/lib/sparkbase/backups
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+    # Root inside the container so it can use the Docker socket.
+    user: "0:0"
     volumes:
       - backups:/var/lib/sparkbase/backups
+      - /var/run/docker.sock:/var/run/docker.sock
     networks: [web, control, data]
     depends_on:
       control-db: { condition: service_healthy }
       control-redis: { condition: service_healthy }
-      pg-host: { condition: service_healthy }
-      cache-host: { condition: service_healthy }
       garage: { condition: service_started }
 
   dashboard:
@@ -119,6 +125,7 @@ services:
   # Tenant Postgres (postgres, vector, queue and auth services), with pgvector.
   pg-host:
     <<: *restart
+    profiles: [shared-hosts]
     image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: sb_admin
@@ -140,6 +147,7 @@ services:
   # auth_query, so new roles work without config changes.
   pgbouncer:
     <<: *restart
+    profiles: [shared-hosts]
     image: edoburu/pgbouncer:v1.26.0-p0
     environment:
       DB_HOST: pg-host
@@ -163,6 +171,7 @@ services:
   # Tenant Redis: one ACL user per cache service.
   cache-host:
     <<: *restart
+    profiles: [shared-hosts]
     image: redis:8-alpine
     environment:
       CACHE_HOST_PASSWORD: ${CACHE_HOST_PASSWORD}
@@ -196,7 +205,8 @@ services:
 networks:
   web: {}
   control: { internal: true }
-  data: {}
+  data:
+    name: ${SPARKBASE_DATA_NETWORK:-sparkbase_data}
 
 volumes:
   letsencrypt: {}

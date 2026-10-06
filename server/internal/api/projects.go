@@ -46,8 +46,19 @@ func (s *Server) resourceJSON(r *store.Resource) map[string]any {
 		"id": r.ID, "projectId": r.ProjectID, "projectRef": r.ProjectSlug, "kind": r.Kind, "name": r.Name,
 		"plan": r.PlanID, "limits": r.Limits, "status": r.Status, "writeLocked": r.WriteLocked,
 		"endpoint": r.Endpoint, "lastError": r.LastError, "lastActiveAt": r.LastActiveAt,
-		"createdAt": r.CreatedAt, "apiUrl": s.apiURL(r),
+		"createdAt": r.CreatedAt, "apiUrl": s.apiURL(r), "runtime": r.Runtime,
 	}
+}
+
+// withRuntime adds whether a container service is awake right now.
+func (s *Server) withRuntime(ctx context.Context, r *store.Resource, out map[string]any) map[string]any {
+	if r.Runtime == "container" && s.Engine != nil {
+		running, err := s.Engine.Running(ctx, r)
+		if err == nil {
+			out["awake"] = running
+		}
+	}
+	return out
 }
 
 func (s *Server) loadProject(r *http.Request, p *principal) (*store.Project, error) {
@@ -181,7 +192,7 @@ func (s *Server) projectRoutes() {
 		}
 		res := make([]map[string]any, 0, len(list))
 		for i := range list {
-			res = append(res, s.resourceJSON(&list[i]))
+			res = append(res, s.withRuntime(r.Context(), &list[i], s.resourceJSON(&list[i])))
 		}
 		return httpx.OK(w, map[string]any{"project": s.projectJSON(proj), "resources": res})
 	})
@@ -313,7 +324,7 @@ func (s *Server) projectRoutes() {
 		if err != nil {
 			return err
 		}
-		return httpx.OK(w, map[string]any{"resource": s.resourceJSON(res)})
+		return httpx.OK(w, map[string]any{"resource": s.withRuntime(r.Context(), res, s.resourceJSON(res))})
 	})
 
 	s.user("PATCH /v1/resources/{id}", func(w http.ResponseWriter, r *http.Request, p *principal) error {

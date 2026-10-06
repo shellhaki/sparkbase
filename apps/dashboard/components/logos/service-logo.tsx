@@ -8,6 +8,10 @@ export const KIND_COLOR: Record<string, string> = {
   vector: "var(--brand)",
   queue: "var(--brand)",
   auth: "var(--brand)",
+  realtime: "var(--brand)",
+  cron: "var(--brand)",
+  backup: "var(--brand)",
+  monitor: "var(--brand)",
 };
 
 function Mark({ kind, color }: { kind: string; color: string }) {
@@ -61,6 +65,40 @@ function Mark({ kind, color }: { kind: string; color: string }) {
           <path d="M12 2.3 19.5 5v6.1c0 4.9-3.2 8.8-7.5 10.6C7.7 19.9 4.5 16 4.5 11.1V5L12 2.3Z" fill={color} fillOpacity=".22" stroke={color} strokeWidth="1.6" strokeLinejoin="round" />
           <circle cx="12" cy="10.3" r="2.2" fill={color} />
           <path d="M11 11.8h2l.5 4.2h-3l.5-4.2Z" fill={color} />
+        </g>
+      );
+    case "realtime":
+      // Signal radiating from a point.
+      return (
+        <g fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round">
+          <circle cx="12" cy="12" r="2.2" fill={color} />
+          <path d="M8.2 8.2a5.4 5.4 0 0 0 0 7.6M15.8 8.2a5.4 5.4 0 0 1 0 7.6" />
+          <path d="M5.3 5.3a9.5 9.5 0 0 0 0 13.4M18.7 5.3a9.5 9.5 0 0 1 0 13.4" strokeOpacity=".5" />
+        </g>
+      );
+    case "cron":
+      // A clock face with ticks.
+      return (
+        <g fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7v5l3.2 2" />
+          <path d="M12 3.5v1.2M20.5 12h-1.2M12 20.5v-1.2M3.5 12h1.2" strokeOpacity=".5" />
+        </g>
+      );
+    case "backup":
+      // An archive box with a returning arrow.
+      return (
+        <g fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round">
+          <rect x="3.5" y="4" width="17" height="4.5" rx="1.2" />
+          <path d="M5 8.5v9.8c0 .7.6 1.2 1.2 1.2h11.6c.7 0 1.2-.5 1.2-1.2V8.5" />
+          <path d="M12 11.5v5M9.6 14.2 12 16.6l2.4-2.4" />
+        </g>
+      );
+    case "monitor":
+      // A heartbeat line.
+      return (
+        <g fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2.5 12.5h4l2-5 3.5 10 2.5-7 1.5 2h5.5" />
         </g>
       );
   }
