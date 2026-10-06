@@ -22,7 +22,7 @@ Sparkbase is open source and self-hosted only. No billing, no pricing, no hosted
 **Hard rules**
 
 - No ORM and no query builder. Hand-written, parameterized SQL in small query functions.
-- Never log passwords, keys, tokens or connection strings (the first-run setup token is the one allowed exception).
+- Never log passwords, keys, tokens or connection strings.
 - Credentials encrypted with AES-256-GCM. Passwords argon2id; account keys, session tokens and one-time tokens stored only as SHA-256 hashes.
 - Email and password sign-in for dashboard users and the project auth service (argon2id). Nothing may depend on SMTP being configured.
 - Every service has its own role, credentials and namespace. The project API runs as the service's own credentials.

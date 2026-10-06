@@ -188,10 +188,10 @@ func (s *Server) adminRoutes() {
 
 	s.admin("PATCH /v1/admin/settings", func(w http.ResponseWriter, r *http.Request, p *principal) error {
 		var in struct {
-			AutoPauseDays      *int    `json:"autoPauseDays"`
-			ResourceCap        *int    `json:"resourceCap"`
-			MembersChangePlans *bool   `json:"membersChangePlans"`
-			RotationGraceSecs  *int    `json:"rotationGraceSeconds"`
+			AutoPauseDays      *int  `json:"autoPauseDays"`
+			ResourceCap        *int  `json:"resourceCap"`
+			MembersChangePlans *bool `json:"membersChangePlans"`
+			RotationGraceSecs  *int  `json:"rotationGraceSeconds"`
 		}
 		if err := httpx.Decode(r, &in, 0); err != nil {
 			return err

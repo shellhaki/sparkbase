@@ -23,10 +23,10 @@ func ValidName(name string) bool { return nameRe.MatchString(name) }
 
 // Settings is the typed view of install settings.
 type Settings struct {
-	AutoPauseDays      int    `json:"autoPauseDays"`
-	ResourceCap        int    `json:"resourceCap"`
-	MembersChangePlans bool   `json:"membersChangePlans"`
-	RotationGraceSecs  int    `json:"rotationGraceSeconds"`
+	AutoPauseDays      int  `json:"autoPauseDays"`
+	ResourceCap        int  `json:"resourceCap"`
+	MembersChangePlans bool `json:"membersChangePlans"`
+	RotationGraceSecs  int  `json:"rotationGraceSeconds"`
 }
 
 func (a *App) Settings(ctx context.Context) (Settings, error) {
