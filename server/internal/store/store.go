@@ -92,3 +92,9 @@ func (s *Store) Now(ctx context.Context) (time.Time, error) {
 	err := s.q.QueryRow(ctx, `select now()`).Scan(&t)
 	return t, err
 }
+
+// XactLock takes a transaction-scoped advisory lock. Call it inside Tx.
+func (s *Store) XactLock(ctx context.Context, key int64) error {
+	_, err := s.q.Exec(ctx, `select pg_advisory_xact_lock($1)`, key)
+	return err
+}

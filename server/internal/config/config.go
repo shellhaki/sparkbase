@@ -27,6 +27,7 @@ type Config struct {
 	BootstrapPGHost    string
 	BootstrapCacheHost string
 	BootstrapStorage   string
+	BackupDir          string
 	Mode               string // "all", "api" or "worker"
 	SecureCookies      bool
 	LogLevel           string
@@ -63,6 +64,7 @@ func Load(getenv func(string) string) (*Config, error) {
 		BootstrapPGHost:    opt("BOOTSTRAP_PG_HOST", ""),
 		BootstrapCacheHost: opt("BOOTSTRAP_CACHE_HOST", ""),
 		BootstrapStorage:   opt("BOOTSTRAP_STORAGE", ""),
+		BackupDir:          opt("BACKUP_DIR", ""),
 		Mode:               opt("SPARKBASE_MODE", "all"),
 		LogLevel:           opt("LOG_LEVEL", "info"),
 	}

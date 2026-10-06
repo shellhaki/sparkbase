@@ -1,0 +1,92 @@
+// Command sparkbase-server runs the Sparkbase API, the worker, or both.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/shellhaki/sparkbase/server/internal/api"
+	"github.com/shellhaki/sparkbase/server/internal/app"
+	"github.com/shellhaki/sparkbase/server/internal/config"
+	"github.com/shellhaki/sparkbase/server/internal/logx"
+	"github.com/shellhaki/sparkbase/server/internal/worker"
+)
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return err
+	}
+	log := logx.New(os.Stdout, cfg.LogLevel)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	a, err := app.New(ctx, cfg, log, nil)
+	if err != nil {
+		return err
+	}
+	defer a.Close()
+	if !a.Mail.Configured() {
+		log.Warn("SMTP_URL is not set: sign-in links and emails are written to these logs")
+	}
+
+	var wg sync.WaitGroup
+	if cfg.Mode == "all" || cfg.Mode == "api" {
+		srv := api.New(a)
+		if tok, err := srv.IssueSetupToken(ctx); err != nil {
+			return err
+		} else if tok != "" {
+			// The one log line allowed to hold a secret: without it nobody can
+			// claim the fresh install.
+			fmt.Fprintf(os.Stdout, "\n  Sparkbase first-run setup\n  setup token: %s\n  open %s/setup and paste it\n\n", tok, cfg.DashboardURL)
+		}
+		hs := &http.Server{
+			Addr: ":" + strconv.Itoa(cfg.Port), Handler: srv.Handler(),
+			ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second,
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Info("api listening", "port", cfg.Port, "url", cfg.PublicAPIURL)
+			if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error("api stopped", "err", err.Error())
+				stop()
+			}
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-ctx.Done()
+			sctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			_ = hs.Shutdown(sctx)
+		}()
+	}
+	if cfg.Mode == "all" || cfg.Mode == "worker" {
+		w := worker.New(a)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Info("worker started", "id", w.ID)
+			w.Run(ctx)
+			log.Info("worker stopped")
+		}()
+	}
+	wg.Wait()
+	return nil
+}
