@@ -1,4 +1,7 @@
-# Quickstart
+---
+title: Quickstart
+description: Create a project, add services and call them from your app.
+---
 
 1. Sign in to the dashboard and create a project. It gets a **project URL** and two keys:
    - **Publishable key** (`sbp_`): safe in browsers. It can only call the auth routes.

@@ -556,6 +556,10 @@ func (s *Server) connectionInfo(ctx context.Context, res *store.Resource) (map[s
 	if res.Status == "provisioning" || res.Status == "failed" || res.Status == "deleting" {
 		return nil, httpx.NotReady(res.Status)
 	}
+	// Platform services live in the control plane and have no credentials.
+	if app.IsControlKind(res.Kind) {
+		return out, nil
+	}
 	cred, err := s.Store.CurrentCredential(ctx, res.ID)
 	if err != nil {
 		return nil, err

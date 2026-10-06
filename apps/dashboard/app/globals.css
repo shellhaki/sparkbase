@@ -76,9 +76,11 @@ body {
   }
 }
 
-:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
 }
 
 html {
@@ -286,4 +288,141 @@ html {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Documentation pages */
+.docs-prose {
+  font-size: 15.5px;
+  line-height: 1.75;
+  color: color-mix(in srgb, var(--foreground) 88%, transparent);
+}
+.docs-prose > * + * {
+  margin-top: 1.15em;
+}
+.docs-prose h2 {
+  margin-top: 2.6em;
+  font-family: var(--font-sora), var(--font-inter), sans-serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  scroll-margin-top: 5rem;
+}
+.docs-prose h3 {
+  margin-top: 2em;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  scroll-margin-top: 5rem;
+}
+.docs-prose h2 .anchor,
+.docs-prose h3 .anchor {
+  color: inherit;
+  text-decoration: none;
+}
+.docs-prose a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  text-underline-offset: 3px;
+}
+.docs-prose a:hover {
+  text-decoration-color: var(--brand);
+}
+.docs-prose strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.docs-prose ul,
+.docs-prose ol {
+  padding-left: 1.3em;
+}
+.docs-prose ul {
+  list-style: disc;
+}
+.docs-prose ol {
+  list-style: decimal;
+}
+.docs-prose li + li {
+  margin-top: 0.35em;
+}
+.docs-prose li::marker {
+  color: var(--muted-foreground);
+}
+.docs-prose :not(pre) > code {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  padding: 0.12em 0.4em;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 0.86em;
+  color: var(--foreground);
+}
+.docs-prose .code-block {
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #0d1117;
+}
+.docs-prose .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1f2430;
+  padding: 0.45rem 0.9rem;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 11px;
+  color: #8b949e;
+}
+.docs-prose .code-head .copy {
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  color: #8b949e;
+}
+.docs-prose .code-head .copy:hover {
+  background: #1f2430;
+  color: #e6edf3;
+}
+.docs-prose pre {
+  overflow-x: auto;
+  padding: 1rem 1.1rem;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  background: transparent !important;
+}
+.docs-prose .table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.docs-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.docs-prose th {
+  background: var(--card);
+  text-align: left;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.docs-prose th,
+.docs-prose td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.6rem 0.9rem;
+  vertical-align: top;
+}
+.docs-prose tr:last-child td {
+  border-bottom: 0;
+}
+.docs-prose .callout {
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, var(--border));
+  background: color-mix(in srgb, var(--brand) 7%, transparent);
+  padding: 0.9rem 1.1rem;
+}
+.docs-prose .callout strong:first-child {
+  color: var(--brand);
+  margin-right: 0.35em;
 }

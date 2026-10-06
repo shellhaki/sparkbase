@@ -1,4 +1,7 @@
-# SDK
+---
+title: SDK
+description: @sparkbase/sdk: one client for every service in a project.
+---
 
 `npm install @sparkbase/sdk`. No dependencies; uses `fetch`, so it runs in Node 18+, Bun, Deno, browsers and edge runtimes.
 
@@ -13,6 +16,10 @@ const sb = createClient(projectUrl, key, { storage?, fetch?, headers?, autoRefre
 | `sb.cache(name)` | `get`, `getJSON`, `set(key, value, { ttl?, nx? })`, `del`, `incr`, `batch`, `keys` |
 | `sb.storage(name)` | `list`, `upload(key, data, { contentType? })`, `download(key)` (a `Response`), `remove`, `signedUrl(key, { method?, expiresIn? })` |
 | `sb.vector(name)` | `createCollection`, `listCollections`, `collection(c).upsert / query / get / delete / drop` |
+| `sb.realtime(name)` | `broadcast(channel, payload, { event? })`, `subscribe(channels, onMessage)` (returns a stop function), `watchTable(postgres, table)` |
+| `sb.cron(name)` | `list`, `create({ name, schedule, action })`, `update`, `remove`, `run` |
+| `sb.monitor(name)` | `list`, `create({ name, url, intervalSeconds? })`, `remove` |
+| `sb.backup(name)` | `settings(patch?)`, `run` |
 | `sb.queue(name)` | `createQueue`, `listQueues`, `queue(q).send / sendBatch / receive / ack / nack / stats / dead / redrive / purge / drop` |
 | `sb.auth` | `signUp`, `signInWithPassword`, `signInWithOtp`, `verifyOtp`, `recover`, `refreshSession`, `getSession`, `getAccessToken`, `getUser`, `updateUser`, `signOut`, `onAuthStateChange` |
 | `sb.auth.admin` | `listUsers`, `createUser`, `getUser`, `updateUser`, `deleteUser`, `generateLink`, `getSettings`, `updateSettings` |

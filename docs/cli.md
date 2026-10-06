@@ -1,4 +1,7 @@
-# CLI
+---
+title: CLI
+description: The sparkbase command line.
+---
 
 Download `sparkbase` from the release page, or build it: `cd server && go build ./cmd/sparkbase`.
 

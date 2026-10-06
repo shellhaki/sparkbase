@@ -1,0 +1,7 @@
+[
+  { "group": "Get started", "pages": ["introduction", "quickstart", "concepts"] },
+  { "group": "Data services", "pages": ["services", "postgres", "cache", "storage", "vector", "queues", "auth"] },
+  { "group": "Platform services", "pages": ["realtime", "cron", "backups", "monitoring"] },
+  { "group": "Build", "pages": ["sdk", "project-api", "cli", "errors"] },
+  { "group": "Operate", "pages": ["self-hosting", "architecture", "observability", "runbooks", "sizing"] }
+]

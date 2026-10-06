@@ -1,6 +1,9 @@
-# Self-hosting
+---
+title: Self-hosting
+description: Install and run Sparkbase on your own server.
+---
 
-Sparkbase runs as one Docker Compose stack: Traefik at the edge, the Sparkbase server (API and worker), the dashboard, a control database and Redis, a tenant Postgres host with PgBouncer and pgvector, a tenant Redis host, and Garage for object storage. Only Traefik publishes ports.
+Sparkbase runs as one Docker Compose stack: Traefik at the edge, the Sparkbase server (API, worker and activator), the dashboard, a control database and Redis, and Garage for object storage. Every database and cache service you add runs in **its own container**, created by Sparkbase on the same Docker host, with the plan's memory limit. Idle containers stop and wake on the next connection (see [How Sparkbase works](architecture)). Only Traefik publishes ports.
 
 ## Requirements
 
@@ -65,6 +68,12 @@ Remove `traefik` from `COMPOSE_PROFILES` in `.env`. Then give your Traefik:
 
 The bundled hosts are registered on first start. To add capacity, prepare another Postgres (with the same `deploy/hosts/postgres/init.sh`) or Redis server reachable from the Sparkbase server, then register it in the dashboard (Admin → Hosts) or with the API. New services go to the least-loaded active host of their kind, weighted by each host's weight. Set a host to `draining` to stop new services landing on it.
 
+## Containers and memory
+
+The server needs the Docker socket (mounted in the compose file) to create service containers on the `sparkbase_data` network. Set how long a container may sit idle before it stops in **Admin → Settings → Stop idle containers after** (default 10 minutes, 0 keeps them running). A sleeping service uses no memory; waking takes well under a second.
+
+Prefer one shared Postgres and Redis for everything? Set `ENGINE=shared`, add `shared-hosts` to `COMPOSE_PROFILES` and set `BOOTSTRAP_PG_HOST` and `BOOTSTRAP_CACHE_HOST` as shown in `.env.example`. Services then share those hosts (with PgBouncer on the pooled port) and never sleep.
+
 ## Upgrades
 
 ```bash
@@ -79,6 +88,6 @@ Back up these together:
 
 - The control database (`control-db` volume, or `pg_dump`).
 - `ENCRYPTION_KEY` from `.env`. Without it, stored credentials cannot be decrypted.
-- The `pg-host`, `cache-host` and `garage-*` volumes, or use per-service backups (nightly for Postgres-family services) and Garage replication.
+- The service volumes (`sb-…-data`, one per database or cache service) and the `garage-*` volumes, or use per-service backups, a [backup service](backups) with an off-site bucket, and Garage replication.
 
 Keep at least one copy off the server: a backup on the same disk does not survive that disk.

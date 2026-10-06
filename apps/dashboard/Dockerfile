@@ -1,9 +1,12 @@
-# Sparkbase dashboard: Next.js standalone build.
+# Sparkbase dashboard and docs: Next.js standalone build.
+# Build from the repository root so the docs/ folder is included:
+#   docker build -f apps/dashboard/Dockerfile .
 FROM oven/bun:1.4-alpine AS build
 WORKDIR /app
-COPY package.json bun.lock ./
+COPY apps/dashboard/package.json apps/dashboard/bun.lock ./
 RUN bun install --frozen-lockfile
-COPY . .
+COPY apps/dashboard/ .
+COPY docs ./content/docs
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 

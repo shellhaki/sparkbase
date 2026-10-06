@@ -1,4 +1,7 @@
-# Project API
+---
+title: Project API
+description: HTTP reference for everything under the project URL.
+---
 
 Base URL: the project URL, `https://api.example.com/p/<ref>`.
 
@@ -85,3 +88,54 @@ Keys are relative paths: no leading `/`, no `.` or `..` segments.
 | GET/PATCH | `/auth/admin/settings` | secret | `{ allowSignups, siteUrl, redirectUrls, accessTokenTtl, refreshTokenTtl }` |
 
 A session is `{ access_token, token_type, expires_in, expires_at, refresh_token, user }`.
+
+## Realtime
+
+| Method | Path | Key | Body |
+| --- | --- | --- | --- |
+| POST | `/realtime/{name}/broadcast` | secret | `{ channel, event?, payload }` |
+| GET | `/realtime/{name}/subscribe?channel=…&apikey=…` | publishable (`public:` only) or secret | Server-Sent Events: `ready`, `message` |
+| GET/POST | `/realtime/{name}/watches` | secret | `{ postgres, table }` → `{ channel: "db:…:…" }` |
+| DELETE | `/realtime/{name}/watches/{postgres}/{table}` | secret | |
+
+## Cron
+
+| Method | Path | Body |
+| --- | --- | --- |
+| GET/POST | `/cron/{name}/jobs` | `{ name, schedule, action }` |
+| PATCH/DELETE | `/cron/{name}/jobs/{id}` | `{ schedule?, action?, enabled? }` |
+| POST | `/cron/{name}/jobs/{id}/run` | → `{ status, output }` |
+| GET | `/cron/{name}/jobs/{id}/runs` | |
+
+## Monitor
+
+| Method | Path | Body |
+| --- | --- | --- |
+| GET/POST | `/monitor/{name}/checks` | `{ name, url, method?, intervalSeconds?, timeoutSeconds?, expectStatus? }` |
+| PATCH/DELETE | `/monitor/{name}/checks/{id}` | `{ enabled?, intervalSeconds?, url? }` |
+| POST | `/monitor/{name}/checks/{id}/run` | |
+| GET | `/monitor/{name}/checks/{id}/results?hours=24` | |
+| PATCH | `/monitor/{name}/settings` | `{ alertWebhook }` |
+
+## Backup
+
+| Method | Path | Body |
+| --- | --- | --- |
+| GET/PATCH | `/backup/{name}/settings` | `{ schedule?, retentionDays?, targets?, destination? }` |
+| POST | `/backup/{name}/run` | |
+| GET | `/backup/{name}/runs` | |
+
+## Consoles
+
+| Method | Path | Body |
+| --- | --- | --- |
+| POST | `/cache/{name}/command` | `{ args: ["GET", "key"] }` → `{ output }` |
+| GET | `/postgres/{name}/extensions` | → `{ installed, available }` |
+
+## Logs and metrics (management API)
+
+| Method | Path | |
+| --- | --- | --- |
+| GET | `/v1/resources/{id}/logs?follow=1&source=api\|container` | Server-Sent Events: `log`, `line`, `state` |
+| GET | `/v1/resources/{id}/metrics?minutes=60` | Requests, errors, latency per minute; memory, CPU and storage samples |
+| GET | `/v1/admin/logs?follow=1` | Server logs (admins) |

@@ -1,4 +1,7 @@
-# Runbooks
+---
+title: Runbooks
+description: Step-by-step procedures for operators.
+---
 
 Commands assume the Docker install in `deploy/`.
 

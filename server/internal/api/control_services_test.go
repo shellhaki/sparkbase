@@ -120,6 +120,11 @@ func TestCronMonitorAndBackupServices(t *testing.T) {
 	sec := e.ProjectClient(p.Secret)
 	pre := "/p/" + p.Ref
 
+	// Platform services have no credentials; connection info still answers.
+	if got := admin.Do("GET", "/v1/resources/"+cronID+"/connection", nil).Must(t, 200).Str("kind"); got != "cron" {
+		t.Fatalf("connection kind = %q", got)
+	}
+
 	var hits atomic.Int64
 	var healthy atomic.Bool
 	healthy.Store(true)

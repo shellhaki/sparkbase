@@ -1,0 +1,8 @@
+**/node_modules
+**/.next
+**/.env
+**/.env.*
+.dev
+.git
+waitlist
+server/bin

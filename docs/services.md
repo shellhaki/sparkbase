@@ -1,6 +1,13 @@
-# Services
+---
+title: Services overview
+description: What every service kind does and how to connect to it.
+---
 
-Every service gets its own credentials and limits. Services never share a login.
+Every service gets its own credentials, limits, live logs and metrics. Services never share a login.
+
+| Data services | Platform services |
+| --- | --- |
+| [Postgres](postgres), [cache](cache), [storage](storage), [vector](vector), [queues](queues), [auth](auth) | [Realtime](realtime), [cron](cron), [backups](backups), [monitoring](monitoring) |
 
 ## Postgres
 

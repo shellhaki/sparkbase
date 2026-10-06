@@ -1,4 +1,7 @@
-# Errors
+---
+title: Errors
+description: Error codes and what to do about them.
+---
 
 | Code | HTTP | Meaning | What to do |
 | --- | --- | --- | --- |

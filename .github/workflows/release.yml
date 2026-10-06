@@ -16,8 +16,10 @@ jobs:
         include:
           - name: sparkbase-server
             context: server
+            file: server/Dockerfile
           - name: sparkbase-dashboard
-            context: apps/dashboard
+            context: .
+            file: apps/dashboard/Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -30,6 +32,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: VERSION=${{ github.ref_name }}
