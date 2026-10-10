@@ -365,8 +365,12 @@ func (e *Env) WaitStatus(c *Client, id, status string) *Resp {
 	deadline := time.Now().Add(5 * time.Minute)
 	for {
 		res := c.Do("GET", "/v1/resources/"+id, nil)
-		if res.Str("resource", "status") == status {
+		got := res.Str("resource", "status")
+		if got == status {
 			return res
+		}
+		if got == "failed" && status != "failed" {
+			e.T.Fatalf("service %s failed: %s", id, res.Str("resource", "lastError"))
 		}
 		if time.Now().After(deadline) {
 			e.T.Fatalf("service %s never became %s: %s", id, status, res.String())

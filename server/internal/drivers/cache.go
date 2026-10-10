@@ -3,6 +3,7 @@ package drivers
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -61,14 +62,45 @@ func cacheRules(prefix, password string, enabled, locked bool) []any {
 	return rules
 }
 
+// unknownRule matches Redis rejecting a rule that names a command or
+// subcommand this server version does not have, for example WAITAOF before 7.2.
+var unknownRule = regexp.MustCompile(`modifier '([+-][a-z_|]+)': Unknown (command|subcommand)`)
+
 func (c *Cache) setUser(ctx context.Context, rc *redis.Client, user, prefix, password string, enabled, locked bool) error {
-	args := append([]any{"acl", "setuser", user}, cacheRules(prefix, password, enabled, locked)...)
-	if err := rc.Do(ctx, args...).Err(); err != nil {
+	if err := setUserRules(ctx, rc, user, cacheRules(prefix, password, enabled, locked)); err != nil {
 		return err
 	}
 	// Persist the ACL when the host uses an ACL file; ignore hosts without one.
 	if err := rc.Do(ctx, "acl", "save").Err(); err != nil && !strings.Contains(err.Error(), "ACL file") && !strings.Contains(err.Error(), "aclfile") {
 		return err
+	}
+	return nil
+}
+
+// setUserRules applies rules, leaving out any that name a command or
+// subcommand the server does not know.
+func setUserRules(ctx context.Context, rc *redis.Client, user string, rules []any) error {
+	for {
+		err := rc.Do(ctx, append([]any{"acl", "setuser", user}, rules...)...).Err()
+		if err == nil {
+			break
+		}
+		// A command the server does not have cannot run, so denying it is moot,
+		// and dropping an allow rule only makes the user more restricted.
+		m := unknownRule.FindStringSubmatch(err.Error())
+		if m == nil {
+			return err
+		}
+		next := rules[:0:0]
+		for _, r := range rules {
+			if r != m[1] {
+				next = append(next, r)
+			}
+		}
+		if len(next) == len(rules) {
+			return err
+		}
+		rules = next
 	}
 	return nil
 }
