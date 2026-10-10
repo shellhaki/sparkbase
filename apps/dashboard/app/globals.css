@@ -5,6 +5,9 @@
  * Dark is the default; light follows prefers-color-scheme.
  */
 :root {
+  --font-inter: "Inter";
+  --font-sora: "Sora";
+  --font-jetbrains: "JetBrains Mono";
   --brand: #2d57fb;
   --brand-hover: #4a6dfc;
   --on-brand: #ffffff;

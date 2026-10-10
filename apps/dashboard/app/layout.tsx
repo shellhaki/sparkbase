@@ -1,10 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono, Sora } from "next/font/google";
+import "./fonts.css";
 import "./globals.css";
-
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
-const sora = Sora({ variable: "--font-sora", subsets: ["latin"], display: "swap" });
-const jetbrains = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "Sparkbase", template: "%s · Sparkbase" },
@@ -21,7 +17,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`antialiased ${inter.variable} ${sora.variable} ${jetbrains.variable}`}>
+    <html lang="en" className="antialiased">
+      <head>
+        <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/sora-latin-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+      </head>
       <body className="min-h-dvh font-sans">{children}</body>
     </html>
   );
