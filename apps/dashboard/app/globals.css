@@ -362,26 +362,26 @@ html {
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: #0d1117;
+  background: #0f0f12;
 }
 .docs-prose .code-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #1f2430;
+  border-bottom: 1px solid #1f1f24;
   padding: 0.45rem 0.9rem;
   font-family: var(--font-jetbrains), monospace;
   font-size: 11px;
-  color: #8b949e;
+  color: #8a90a0;
 }
 .docs-prose .code-head .copy {
   border-radius: 6px;
   padding: 0.15rem 0.5rem;
-  color: #8b949e;
+  color: #8a90a0;
 }
 .docs-prose .code-head .copy:hover {
-  background: #1f2430;
-  color: #e6edf3;
+  background: #1f1f24;
+  color: #e4e6ee;
 }
 .docs-prose pre {
   overflow-x: auto;
@@ -425,4 +425,20 @@ html {
 .docs-prose .callout strong:first-child {
   color: var(--brand);
   margin-right: 0.35em;
+}
+
+/* Highlighted code: shiki emits both themes as CSS variables. */
+.code-surface pre.shiki {
+  background: transparent !important;
+  margin: 0;
+}
+.code-surface .shiki span {
+  color: var(--shiki-dark);
+  font-style: var(--shiki-dark-font-style);
+}
+@media (prefers-color-scheme: light) {
+  .code-surface .shiki span {
+    color: var(--shiki-light);
+    font-style: var(--shiki-light-font-style);
+  }
 }

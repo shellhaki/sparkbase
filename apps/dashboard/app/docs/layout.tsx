@@ -23,7 +23,12 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           </Link>
           <DocsSearch index={index} />
           <nav className="ml-auto flex items-center gap-1 text-sm">
-            <a href="https://github.com/shellhaki/sparkbase" target="_blank" rel="noreferrer" className="hidden rounded-lg px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground sm:block">
+            <a
+              href="https://github.com/shellhaki/sparkbase"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden rounded-lg px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground sm:block"
+            >
               GitHub
             </a>
             <Link href="/" className="rounded-lg bg-brand px-3 py-1.5 font-medium text-on-brand transition-colors hover:bg-brand-hover">

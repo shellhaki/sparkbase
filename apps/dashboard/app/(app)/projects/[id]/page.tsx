@@ -46,7 +46,22 @@ function AddServiceModal({ open, onClose, project, onAdded, hasAuth }: { open: b
   const { data: plans } = useApi<{ plans: Plan[] }>(open ? `/v1/plans?kind=${kind}` : null);
 
   useEffect(() => {
-    setName(({ auth: "auth", postgres: "main", storage: "files", cache: "cache", queue: "jobs", vector: "embeddings", realtime: "live", cron: "tasks", backup: "nightly", monitor: "uptime" } as Record<string, string>)[kind] ?? kind);
+    setName(
+      (
+        {
+          auth: "auth",
+          postgres: "main",
+          storage: "files",
+          cache: "cache",
+          queue: "jobs",
+          vector: "embeddings",
+          realtime: "live",
+          cron: "tasks",
+          backup: "nightly",
+          monitor: "uptime",
+        } as Record<string, string>
+      )[kind] ?? kind,
+    );
     setPlan("");
     setError(null);
   }, [kind]);
@@ -60,7 +75,11 @@ function AddServiceModal({ open, onClose, project, onAdded, hasAuth }: { open: b
           setBusy(true);
           setError(null);
           try {
-            await api("POST", `/v1/projects/${project.id}/resources`, { kind, name, plan: plan || undefined });
+            await api("POST", `/v1/projects/${project.id}/resources`, {
+              kind,
+              name,
+              plan: plan || undefined,
+            });
             onAdded();
             onClose();
           } catch (err) {
@@ -122,7 +141,11 @@ function AddServiceModal({ open, onClose, project, onAdded, hasAuth }: { open: b
 }
 
 function ConnectCard({ project }: { project: Project }) {
-  const { data, reload } = useApi<{ url: string; publishableKey: string; secretKey: string }>(`/v1/projects/${project.id}/keys`);
+  const { data, reload } = useApi<{
+    url: string;
+    publishableKey: string;
+    secretKey: string;
+  }>(`/v1/projects/${project.id}/keys`);
   const [rotating, setRotating] = useState<"publishable" | "secret" | null>(null);
   if (!data) return null;
   return (
@@ -148,17 +171,20 @@ function ConnectCard({ project }: { project: Project }) {
             </Button>
           </div>
         </div>
-        <CodeBlock
-          className="min-w-0"
-          code={`npm install @sparkbase/sdk
-
-import { createClient } from '@sparkbase/sdk'
+        <div className="flex min-w-0 flex-col gap-3">
+          <CodeBlock lang="bash" label="Install" code="npm install @sparkbase/sdk" />
+          <CodeBlock
+            lang="ts"
+            label="Connect"
+            className="flex-1"
+            code={`import { createClient } from '@sparkbase/sdk'
 
 const sb = createClient(
   process.env.SPARKBASE_URL,
   process.env.SPARKBASE_SECRET_KEY,
 )`}
-        />
+          />
+        </div>
       </div>
       <ConfirmModal
         open={!!rotating}
@@ -167,7 +193,9 @@ const sb = createClient(
         body="The current key stops working immediately. Update every app that uses it."
         actionLabel="Rotate key"
         onConfirm={async () => {
-          await api("POST", `/v1/projects/${project.id}/keys/rotate`, { kind: rotating });
+          await api("POST", `/v1/projects/${project.id}/keys/rotate`, {
+            kind: rotating,
+          });
           await reload();
         }}
       />
@@ -182,7 +210,10 @@ export default function ProjectPage() {
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState("");
-  const { data, error, loading, reload } = useApi<{ project: Project; resources: Resource[] }>(`/v1/projects/${id}`);
+  const { data, error, loading, reload } = useApi<{
+    project: Project;
+    resources: Resource[];
+  }>(`/v1/projects/${id}`);
   const provisioning = data?.resources.some((r) => r.status === "provisioning" || r.status === "deleting");
 
   useEffect(() => {

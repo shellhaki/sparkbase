@@ -7,14 +7,7 @@ import { useEffect, useState } from "react";
 import { Greeting } from "@/components/greeting";
 import { ServiceLogo } from "@/components/logos/service-logo";
 import { useSession } from "@/components/shell";
-import {
-  Button,
-  ErrorText,
-  Field,
-  Input,
-  Modal,
-  Skeleton,
-} from "@/components/ui";
+import { Button, ErrorText, Field, Input, Modal, Skeleton } from "@/components/ui";
 import { KIND_LABEL, api, timeAgo, useApi } from "@/lib/api";
 import { DATA_KINDS, KINDS } from "@/lib/kinds";
 
@@ -29,25 +22,12 @@ interface Project {
 }
 
 /** A thin bar split by service kind, in each kind's color. */
-function SignalStrip({
-  kinds,
-  className = "",
-}: {
-  kinds: string[];
-  className?: string;
-}) {
-  if (kinds.length === 0)
-    return <div className={`h-1 rounded-full bg-muted ${className}`} />;
+function SignalStrip({ kinds, className = "" }: { kinds: string[]; className?: string }) {
+  if (kinds.length === 0) return <div className={`h-1 rounded-full bg-muted ${className}`} />;
   return (
-    <div
-      className={`flex h-1 gap-0.5 overflow-hidden rounded-full ${className}`}
-    >
+    <div className={`flex h-1 gap-0.5 overflow-hidden rounded-full ${className}`}>
       {kinds.map((k, i) => (
-        <span
-          key={i}
-          className="flex-1 rounded-full bg-brand"
-          style={{ opacity: 1 - (i % 3) * 0.25 }}
-        />
+        <span key={i} className="flex-1 rounded-full bg-brand" style={{ opacity: 1 - (i % 3) * 0.25 }} />
       ))}
     </div>
   );
@@ -56,21 +36,13 @@ function SignalStrip({
 function ProjectPanel({ p, i }: { p: Project; i: number }) {
   const kinds = p.serviceKinds ?? [];
   return (
-    <Link
-      href={`/projects/${p.id}`}
-      className="group animate-fade-up block"
-      style={{ animationDelay: `${80 + i * 45}ms` }}
-    >
+    <Link href={`/projects/${p.id}`} className="group animate-fade-up block" style={{ animationDelay: `${80 + i * 45}ms` }}>
       <div className="lift relative h-full overflow-hidden rounded-2xl border border-border bg-card/80 p-5 backdrop-blur-sm group-hover:border-brand/40">
         <SignalStrip kinds={kinds} />
         <div className="mt-5 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate font-display text-lg font-semibold tracking-tight">
-              {p.name}
-            </h2>
-            <span className="mt-1 inline-block rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-              {p.ref}
-            </span>
+            <h2 className="truncate font-display text-lg font-semibold tracking-tight">{p.name}</h2>
+            <span className="mt-1 inline-block rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{p.ref}</span>
           </div>
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors group-hover:border-brand/50 group-hover:bg-brand group-hover:text-on-brand">
             <ArrowUpRight className="size-4" />
@@ -82,20 +54,12 @@ function ProjectPanel({ p, i }: { p: Project; i: number }) {
               {kinds.slice(0, 6).map((k, j) => (
                 <ServiceLogo key={j} kind={k} size="sm" />
               ))}
-              {kinds.length > 6 && (
-                <span className="flex size-8 items-center justify-center rounded-lg bg-muted font-mono text-xs">
-                  +{kinds.length - 6}
-                </span>
-              )}
+              {kinds.length > 6 && <span className="flex size-8 items-center justify-center rounded-lg bg-muted font-mono text-xs">+{kinds.length - 6}</span>}
             </div>
           ) : (
-            <span className="text-sm text-muted-foreground">
-              Empty, add a service
-            </span>
+            <span className="text-sm text-muted-foreground">Empty, add a service</span>
           )}
-          <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-            {p.status === "deleting" ? "deleting…" : timeAgo(p.createdAt)}
-          </span>
+          <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{p.status === "deleting" ? "deleting…" : timeAgo(p.createdAt)}</span>
         </div>
       </div>
     </Link>
@@ -105,9 +69,7 @@ function ProjectPanel({ p, i }: { p: Project; i: number }) {
 export default function HomePage() {
   const router = useRouter();
   const { user } = useSession();
-  const { data, error, loading } = useApi<{ projects: Project[] }>(
-    "/v1/projects",
-  );
+  const { data, error, loading } = useApi<{ projects: Project[] }>("/v1/projects");
   const { data: status } = useApi<{ healthy: boolean }>("/v1/status", {
     poll: 30_000,
   });
@@ -138,13 +100,8 @@ export default function HomePage() {
         <div className="relative flex flex-wrap items-end justify-between gap-6">
           <Greeting name={firstName} />
           <div className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1.5 font-mono text-xs backdrop-blur">
-            <span
-              className={`led ${status?.healthy === false ? "text-warning" : "text-success"}`}
-              data-live="true"
-            />
-            {status?.healthy === false
-              ? "a data host needs attention"
-              : "all systems normal"}
+            <span className={`led ${status?.healthy === false ? "text-warning" : "text-success"}`} data-live="true" />
+            {status?.healthy === false ? "a data host needs attention" : "all systems normal"}
           </div>
         </div>
 
@@ -153,57 +110,27 @@ export default function HomePage() {
             { label: "Projects", value: loading ? null : projects.length },
             { label: "Services", value: loading ? null : allKinds.length },
           ].map((s, i) => (
-            <div
-              key={s.label}
-              className="animate-fade-up rounded-2xl border border-border bg-card/70 p-5 backdrop-blur-sm"
-              style={{ animationDelay: `${i * 50}ms` }}
-            >
-              <div className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-                {s.label}
-              </div>
-              {s.value === null ? (
-                <Skeleton className="mt-3 h-9 w-14" />
-              ) : (
-                <div className="tabular mt-2 font-display text-4xl font-semibold tracking-tight">
-                  {s.value}
-                </div>
-              )}
+            <div key={s.label} className="animate-fade-up rounded-2xl border border-border bg-card/70 p-5 backdrop-blur-sm" style={{ animationDelay: `${i * 50}ms` }}>
+              <div className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">{s.label}</div>
+              {s.value === null ? <Skeleton className="mt-3 h-9 w-14" /> : <div className="tabular mt-2 font-display text-4xl font-semibold tracking-tight">{s.value}</div>}
             </div>
           ))}
-          <div
-            className="animate-fade-up rounded-2xl border border-border bg-card/70 p-5 backdrop-blur-sm"
-            style={{ animationDelay: "100ms" }}
-          >
-            <div className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-              Service mix
-            </div>
+          <div className="animate-fade-up rounded-2xl border border-border bg-card/70 p-5 backdrop-blur-sm" style={{ animationDelay: "100ms" }}>
+            <div className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">Service mix</div>
             {byKind.length === 0 ? (
-              <p className="mt-4 text-sm text-muted-foreground">
-                No services yet
-              </p>
+              <p className="mt-4 text-sm text-muted-foreground">No services yet</p>
             ) : (
               <>
                 <div className="mt-4 flex h-2.5 gap-0.5 overflow-hidden rounded-full">
                   {byKind.map(({ k, n }) => (
-                    <span
-                      key={k}
-                      className="bg-brand first:opacity-100 even:opacity-60"
-                      style={{ flex: n }}
-                      title={`${KIND_LABEL[k]}: ${n}`}
-                    />
+                    <span key={k} className="bg-brand first:opacity-100 even:opacity-60" style={{ flex: n }} title={`${KIND_LABEL[k]}: ${n}`} />
                   ))}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
                   {byKind.map(({ k, n }) => (
-                    <span
-                      key={k}
-                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                    >
+                    <span key={k} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span className="size-1.5 rounded-full bg-brand" />
-                      {KIND_LABEL[k]}{" "}
-                      <span className="tabular font-mono text-foreground">
-                        {n}
-                      </span>
+                      {KIND_LABEL[k]} <span className="tabular font-mono text-foreground">{n}</span>
                     </span>
                   ))}
                 </div>
@@ -214,9 +141,7 @@ export default function HomePage() {
       </section>
 
       <div className="mb-5 flex items-center justify-between">
-        <h2 className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-          Your projects
-        </h2>
+        <h2 className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">Your projects</h2>
         {projects.length > 0 && (
           <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
             <Plus className="size-3.5" /> New project
@@ -246,10 +171,7 @@ export default function HomePage() {
               ))}
             </span>
             <span className="flex items-center gap-1.5 text-sm font-medium">
-              <Plus className="size-4" />{" "}
-              {projects.length === 0
-                ? "Create your first project"
-                : "New project"}
+              <Plus className="size-4" /> {projects.length === 0 ? "Create your first project" : "New project"}
             </span>
           </button>
         </div>
@@ -263,11 +185,7 @@ export default function HomePage() {
             setBusy(true);
             setCreateError(null);
             try {
-              const d = await api<{ project: Project }>(
-                "POST",
-                "/v1/projects",
-                { name },
-              );
+              const d = await api<{ project: Project }>("POST", "/v1/projects", { name });
               router.push(`/projects/${d.project.id}`);
             } catch (err) {
               setCreateError(err);
@@ -277,22 +195,11 @@ export default function HomePage() {
           }}
         >
           <Field label="Name">
-            <Input
-              required
-              maxLength={60}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My app"
-              autoFocus
-            />
+            <Input required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="My app" autoFocus />
           </Field>
           <ErrorText error={createError} />
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" loading={busy}>

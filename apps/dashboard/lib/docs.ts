@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Marked, type Tokens } from "marked";
 import { createHighlighter, type Highlighter } from "shiki";
+import { sparkbaseDark } from "./code-theme";
 
 /** Where the Markdown lives: the repo's docs/ folder, or a copy in content/docs. */
 function docsDir(): string {
@@ -33,7 +34,10 @@ export interface DocPage {
   toc: TocItem[];
 }
 
-function parseFront(raw: string): { meta: Record<string, string>; body: string } {
+function parseFront(raw: string): {
+  meta: Record<string, string>;
+  body: string;
+} {
   const m = /^---\n([\s\S]*?)\n---\n/.exec(raw);
   if (!m) return { meta: {}, body: raw };
   const meta: Record<string, string> = {};
@@ -52,7 +56,10 @@ export function loadNav(): NavGroup[] {
   const nav = JSON.parse(fs.readFileSync(path.join(docsDir(), "nav.json"), "utf8")) as Array<{ group: string; pages: string[] }>;
   return nav.map((g) => ({
     group: g.group,
-    pages: g.pages.map((slug) => ({ slug, title: readRaw(slug).meta.title ?? slug })),
+    pages: g.pages.map((slug) => ({
+      slug,
+      title: readRaw(slug).meta.title ?? slug,
+    })),
   }));
 }
 
@@ -71,7 +78,10 @@ export function slugify(text: string): string {
 
 let highlighter: Promise<Highlighter> | null = null;
 function getHighlighter() {
-  highlighter ??= createHighlighter({ themes: ["github-dark-default"], langs: ["ts", "js", "bash", "json", "sql", "go", "yaml", "toml", "http", "text"] });
+  highlighter ??= createHighlighter({
+    themes: [sparkbaseDark],
+    langs: ["ts", "js", "bash", "json", "sql", "go", "yaml", "toml", "http", "text"],
+  });
   return highlighter;
 }
 
@@ -96,7 +106,10 @@ export async function loadPage(slug: string): Promise<DocPage> {
         const language = (lang ?? "text").split(/\s/)[0];
         let html: string;
         try {
-          html = hl.codeToHtml(text, { lang: hl.getLoadedLanguages().includes(language) ? language : "text", theme: "github-dark-default" });
+          html = hl.codeToHtml(text, {
+            lang: hl.getLoadedLanguages().includes(language) ? language : "text",
+            theme: "sparkbase-dark",
+          });
         } catch {
           html = `<pre><code>${escapeHtml(text)}</code></pre>`;
         }
@@ -126,11 +139,22 @@ export async function loadPage(slug: string): Promise<DocPage> {
     },
   });
   const html = await marked.parse(body);
-  return { slug, title: meta.title ?? slug, description: meta.description ?? "", html, toc };
+  return {
+    slug,
+    title: meta.title ?? slug,
+    description: meta.description ?? "",
+    html,
+    toc,
+  };
 }
 
 /** Titles and headings of every page, for search. */
-export function searchIndex(): Array<{ slug: string; title: string; section: string; headings: string[] }> {
+export function searchIndex(): Array<{
+  slug: string;
+  title: string;
+  section: string;
+  headings: string[];
+}> {
   return loadNav().flatMap((g) =>
     g.pages.map((p) => {
       const { body } = readRaw(p.slug);

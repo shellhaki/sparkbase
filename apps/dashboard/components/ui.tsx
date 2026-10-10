@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Copy, Eye, EyeOff, Loader2, X } from "lucide-react";
+import { guessLang, highlight, type CodeLang } from "@/lib/highlight";
 import { toast } from "./toast";
 import { useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
@@ -18,7 +19,11 @@ export function Button({
   children,
   disabled,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: "sm" | "md"; loading?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: Variant;
+  size?: "sm" | "md";
+  loading?: boolean;
+}) {
   const styles: Record<Variant, string> = {
     primary: "bg-brand text-on-brand hover:bg-brand-hover",
     secondary: "border border-border bg-card hover:bg-accent",
@@ -45,10 +50,7 @@ export function Button({
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={cn(
-        "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:border-brand focus:outline-none",
-        className,
-      )}
+      className={cn("h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:border-brand focus:outline-none", className)}
       {...props}
     />
   );
@@ -57,10 +59,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      className={cn(
-        "w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus:border-brand focus:outline-none",
-        className,
-      )}
+      className={cn("w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus:border-brand focus:outline-none", className)}
       {...props}
     />
   );
@@ -68,10 +67,7 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select
-      className={cn("h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:border-brand focus:outline-none", className)}
-      {...props}
-    >
+    <select className={cn("h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:border-brand focus:outline-none", className)} {...props}>
       {children}
     </select>
   );
@@ -123,15 +119,12 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function Badge({ children, tone }: { children: ReactNode; tone?: string }) {
   return (
-    <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium", STATUS_STYLES[tone ?? String(children)] ?? "bg-muted text-muted-foreground")}>
-      {children}
-    </span>
+    <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium", STATUS_STYLES[tone ?? String(children)] ?? "bg-muted text-muted-foreground")}>{children}</span>
   );
 }
 
 export function StatusDot({ status }: { status: string }) {
-  const color =
-    status === "active" ? "bg-success" : status === "provisioning" ? "bg-brand animate-pulse" : status === "paused" ? "bg-warning" : "bg-destructive";
+  const color = status === "active" ? "bg-success" : status === "provisioning" ? "bg-brand animate-pulse" : status === "paused" ? "bg-warning" : "bg-destructive";
   return <span className={cn("inline-block size-2 rounded-full", color)} aria-hidden />;
 }
 
@@ -174,14 +167,36 @@ export function CopyField({ label, value, secret, mono = true }: { label?: strin
   );
 }
 
-export function CodeBlock({ code, className }: { code: string; className?: string }) {
+/** A highlighted snippet with a copy button. Plain text shows until the highlighter loads. */
+export function CodeBlock({ code, lang, label, className }: { code: string; lang?: CodeLang; label?: string; className?: string }) {
   const { copied, copy } = useCopy();
+  const [html, setHtml] = useState<string | null>(null);
+  const language = lang ?? guessLang(code);
+  useEffect(() => {
+    let live = true;
+    highlight(code, language)
+      .then((h) => live && setHtml(h))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [code, language]);
   return (
-    <div className={cn("relative rounded-lg border border-border bg-code", className)}>
-      <button type="button" onClick={() => copy(code)} className="absolute top-2 right-2 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Copy code">
+    <div className={cn("code-surface relative overflow-hidden rounded-lg border border-border bg-code", className)}>
+      {label && <div className="border-b border-border px-4 py-2 font-mono text-[11px] text-muted-foreground">{label}</div>}
+      <button
+        type="button"
+        onClick={() => copy(code)}
+        className={cn("absolute right-2 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground", label ? "top-1" : "top-2")}
+        aria-label="Copy code"
+      >
         {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
       </button>
-      <pre className="overflow-x-auto p-4 pr-12 font-mono text-[13px] leading-relaxed">{code}</pre>
+      {html ? (
+        <div className="overflow-x-auto p-4 pr-12 font-mono text-[13px] leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />
+      ) : (
+        <pre className="overflow-x-auto p-4 pr-12 font-mono text-[13px] leading-relaxed">{code}</pre>
+      )}
     </div>
   );
 }

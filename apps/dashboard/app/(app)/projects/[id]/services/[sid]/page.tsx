@@ -40,7 +40,7 @@ const DATA_TAB: Record<string, string> = {
 };
 
 function snippet(r: Resource): string {
-  const head = `import { createClient } from '@sparkbase/sdk'\nconst sb = createClient(process.env.SPARKBASE_URL, process.env.SPARKBASE_SECRET_KEY)\n\n`;
+  const head = `import { createClient } from '@sparkbase/sdk'\n\nconst sb = createClient(\n  process.env.SPARKBASE_URL,\n  process.env.SPARKBASE_SECRET_KEY,\n)\n\n`;
   switch (r.kind) {
     case "postgres":
       return head + `const { rows } = await sb.postgres('${r.name}').query('select now()')`;
@@ -60,51 +60,139 @@ function snippet(r: Resource): string {
       );
     case "realtime":
       return `// Browser: listen to a public channel with the publishable key
-const es = new EventSource(\`\${process.env.NEXT_PUBLIC_SPARKBASE_URL}/realtime/${r.name}/subscribe?channel=public:room1&apikey=\${publishableKey}\`)
+const url = new URL(\`\${process.env.NEXT_PUBLIC_SPARKBASE_URL}/realtime/${r.name}/subscribe\`)
+url.searchParams.set('channel', 'public:room1')
+url.searchParams.set('apikey', publishableKey)
+const es = new EventSource(url)
 es.addEventListener('message', (e) => console.log(JSON.parse(e.data)))
 
 // Server: broadcast with the secret key
 await fetch(\`\${process.env.SPARKBASE_URL}/realtime/${r.name}/broadcast\`, {
-  method: 'POST', headers: { apikey: process.env.SPARKBASE_SECRET_KEY, 'content-type': 'application/json' },
-  body: JSON.stringify({ channel: 'public:room1', event: 'chat', payload: { text: 'hi' } }),
+  method: 'POST',
+  headers: {
+    apikey: process.env.SPARKBASE_SECRET_KEY,
+    'content-type': 'application/json',
+  },
+  body: JSON.stringify({
+    channel: 'public:room1',
+    event: 'chat',
+    payload: { text: 'hi' },
+  }),
 })`;
     case "cron":
-      return `curl -X POST "$SPARKBASE_URL/cron/${r.name}/jobs" -H "apikey: $SPARKBASE_SECRET_KEY" \\
-  -d '{"name":"cleanup","schedule":"0 3 * * *","action":{"type":"sql","postgres":"main","sql":"delete from sessions where expires_at < now()"}}'`;
+      return `curl -X POST "$SPARKBASE_URL/cron/${r.name}/jobs" \\
+  -H "apikey: $SPARKBASE_SECRET_KEY" \\
+  -d '{
+    "name": "cleanup",
+    "schedule": "0 3 * * *",
+    "action": {
+      "type": "sql",
+      "postgres": "main",
+      "sql": "delete from sessions where expires_at < now()"
+    }
+  }'`;
     case "monitor":
-      return `curl -X POST "$SPARKBASE_URL/monitor/${r.name}/checks" -H "apikey: $SPARKBASE_SECRET_KEY" \\
-  -d '{"name":"api","url":"https://myapp.com/health","intervalSeconds":60}'`;
+      return `curl -X POST "$SPARKBASE_URL/monitor/${r.name}/checks" \\
+  -H "apikey: $SPARKBASE_SECRET_KEY" \\
+  -d '{
+    "name": "api",
+    "url": "https://myapp.com/health",
+    "intervalSeconds": 60
+  }'`;
     case "backup":
-      return `curl -X PATCH "$SPARKBASE_URL/backup/${r.name}/settings" -H "apikey: $SPARKBASE_SECRET_KEY" \\
-  -d '{"targets":["main"],"schedule":"0 3 * * *","retentionDays":7}'`;
+      return `curl -X PATCH "$SPARKBASE_URL/backup/${r.name}/settings" \\
+  -H "apikey: $SPARKBASE_SECRET_KEY" \\
+  -d '{
+    "targets": ["main"],
+    "schedule": "0 3 * * *",
+    "retentionDays": 7
+  }'`;
     case "auth":
-      return `// In the browser, with the publishable key\nconst sb = createClient(process.env.NEXT_PUBLIC_SPARKBASE_URL, process.env.NEXT_PUBLIC_SPARKBASE_PUBLISHABLE_KEY, { storage: localStorage })\n\nawait sb.auth.signUp({ email, password })\nawait sb.auth.signInWithPassword({ email, password })\nconst user = await sb.auth.getUser()\nconst token = await sb.auth.getAccessToken() // send to your server, verify with the JWT secret`;
+      return `// In the browser, with the publishable key\nconst sb = createClient(\n  process.env.NEXT_PUBLIC_SPARKBASE_URL,\n  process.env.NEXT_PUBLIC_SPARKBASE_PUBLISHABLE_KEY,\n  { storage: localStorage },\n)\n\nawait sb.auth.signUp({ email, password })\nawait sb.auth.signInWithPassword({ email, password })\nconst user = await sb.auth.getUser()\n// Send this to your server and verify it with the JWT secret\nconst token = await sb.auth.getAccessToken()`;
   }
   return "";
 }
 
-const USAGE_ROWS: Record<string, Array<{ metric: string; limit: string; label: string; bytes?: boolean; mb?: boolean }>> = {
+const USAGE_ROWS: Record<
+  string,
+  Array<{
+    metric: string;
+    limit: string;
+    label: string;
+    bytes?: boolean;
+    mb?: boolean;
+  }>
+> = {
   postgres: [
-    { metric: "storage_bytes", limit: "storage_mb", label: "Storage", bytes: true, mb: true },
-    { metric: "connections", limit: "direct_connections", label: "Connections" },
+    {
+      metric: "storage_bytes",
+      limit: "storage_mb",
+      label: "Storage",
+      bytes: true,
+      mb: true,
+    },
+    {
+      metric: "connections",
+      limit: "direct_connections",
+      label: "Connections",
+    },
   ],
-  vector: [{ metric: "storage_bytes", limit: "storage_mb", label: "Storage", bytes: true, mb: true }],
-  queue: [{ metric: "storage_bytes", limit: "storage_mb", label: "Storage", bytes: true, mb: true }],
+  vector: [
+    {
+      metric: "storage_bytes",
+      limit: "storage_mb",
+      label: "Storage",
+      bytes: true,
+      mb: true,
+    },
+  ],
+  queue: [
+    {
+      metric: "storage_bytes",
+      limit: "storage_mb",
+      label: "Storage",
+      bytes: true,
+      mb: true,
+    },
+  ],
   auth: [
     { metric: "users", limit: "max_users", label: "Users" },
-    { metric: "storage_bytes", limit: "storage_mb", label: "Storage", bytes: true, mb: true },
+    {
+      metric: "storage_bytes",
+      limit: "storage_mb",
+      label: "Storage",
+      bytes: true,
+      mb: true,
+    },
   ],
   cache: [
-    { metric: "memory_bytes", limit: "memory_mb", label: "Memory", bytes: true, mb: true },
+    {
+      metric: "memory_bytes",
+      limit: "memory_mb",
+      label: "Memory",
+      bytes: true,
+      mb: true,
+    },
     { metric: "connections", limit: "connections", label: "Clients" },
   ],
-  storage: [{ metric: "storage_bytes", limit: "storage_mb", label: "Storage", bytes: true, mb: true }],
+  storage: [
+    {
+      metric: "storage_bytes",
+      limit: "storage_mb",
+      label: "Storage",
+      bytes: true,
+      mb: true,
+    },
+  ],
 };
 
 function Overview({ r }: { r: Resource }) {
   const ready = r.status === "active" || r.status === "paused" || r.status === "suspended";
   const { data: conn, error } = useApi<Connection>(ready ? `/v1/resources/${r.id}/connection` : null);
-  const { data: usage } = useApi<{ usage: Record<string, number>; limits: Record<string, number> }>(ready ? `/v1/resources/${r.id}/usage` : null, { poll: 30_000 });
+  const { data: usage } = useApi<{
+    usage: Record<string, number>;
+    limits: Record<string, number>;
+  }>(ready ? `/v1/resources/${r.id}/usage` : null, { poll: 30_000 });
 
   return (
     <div className="grid gap-6 lg:grid-cols-5">
@@ -113,7 +201,7 @@ function Overview({ r }: { r: Resource }) {
           <CardHeader title="Use it" />
           <div className="space-y-4 p-5">
             <CopyField label="Service API URL" value={r.apiUrl} />
-            <CodeBlock code={snippet(r)} />
+            <CodeBlock code={snippet(r)} label={["cron", "monitor", "backup"].includes(r.kind) ? "curl" : "TypeScript"} />
           </div>
         </Card>
         {conn?.native && (
@@ -121,9 +209,7 @@ function Overview({ r }: { r: Resource }) {
             <CardHeader title="Native connection" description={r.kind === "cache" ? "Any Redis client. Keys must start with the prefix." : "Any Postgres driver, ORM or tool."} />
             <div className="space-y-4 p-5">
               <CopyField label="Connection string" value={String(conn.native.url)} secret />
-              {conn.native.pooledUrl && conn.native.pooledUrl !== conn.native.url && (
-                <CopyField label="Pooled (transaction mode)" value={String(conn.native.pooledUrl)} secret />
-              )}
+              {conn.native.pooledUrl && conn.native.pooledUrl !== conn.native.url && <CopyField label="Pooled (transaction mode)" value={String(conn.native.pooledUrl)} secret />}
               {conn.native.keyPrefix && <CopyField label="Key prefix" value={String(conn.native.keyPrefix)} />}
               <div className="grid gap-3 sm:grid-cols-2">
                 <CopyField label="Host" value={String(conn.native.host)} />
@@ -152,13 +238,7 @@ function Overview({ r }: { r: Resource }) {
               const used = usage?.usage[row.metric] ?? 0;
               const lim = r.limits[row.limit] ?? -1;
               return (
-                <Meter
-                  key={row.metric}
-                  label={row.label}
-                  used={used}
-                  limit={lim < 0 ? -1 : row.mb ? lim * 1024 * 1024 : lim}
-                  format={row.bytes ? formatBytes : (n) => n.toLocaleString()}
-                />
+                <Meter key={row.metric} label={row.label} used={used} limit={lim < 0 ? -1 : row.mb ? lim * 1024 * 1024 : lim} format={row.bytes ? formatBytes : (n) => n.toLocaleString()} />
               );
             })}
             {r.limits.requests_per_month !== undefined && (
@@ -186,10 +266,16 @@ function Overview({ r }: { r: Resource }) {
 }
 
 function Backups({ r }: { r: Resource }) {
-  const { data, reload, error } = useApi<{ backups: Array<{ id: string; status: string; sizeBytes: number | null; createdAt: string; expiresAt: string | null; error: string | null }> }>(
-    `/v1/resources/${r.id}/backups`,
-    { poll: 5000 },
-  );
+  const { data, reload, error } = useApi<{
+    backups: Array<{
+      id: string;
+      status: string;
+      sizeBytes: number | null;
+      createdAt: string;
+      expiresAt: string | null;
+      error: string | null;
+    }>;
+  }>(`/v1/resources/${r.id}/backups`, { poll: 5000 });
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [actionError, setActionError] = useState<unknown>(null);
@@ -259,7 +345,9 @@ function Backups({ r }: { r: Resource }) {
 
 function Settings({ r, reload }: { r: Resource; reload: () => void }) {
   const router = useRouter();
-  const { data: plans } = useApi<{ plans: Array<{ id: string; name: string }> }>(`/v1/plans?kind=${r.kind}`);
+  const { data: plans } = useApi<{
+    plans: Array<{ id: string; name: string }>;
+  }>(`/v1/plans?kind=${r.kind}`);
   const [name, setName] = useState(r.name);
   const [plan, setPlan] = useState(r.plan);
   const [busy, setBusy] = useState<string | null>(null);
@@ -438,9 +526,7 @@ export default function ServicePage() {
         description={
           <span className="flex items-center gap-2">
             {KIND_LABEL[r.kind]} · <StatusDot status={r.status} /> {r.status}
-            {r.runtime === "container" && r.status === "active" && (
-              <Badge tone={r.awake ? "active" : "queued"}>{r.awake ? "awake" : "asleep · wakes on use"}</Badge>
-            )}
+            {r.runtime === "container" && r.status === "active" && <Badge tone={r.awake ? "active" : "queued"}>{r.awake ? "awake" : "asleep · wakes on use"}</Badge>}
             {r.writeLocked && <Badge tone="paused">read-only</Badge>}
           </span>
         }

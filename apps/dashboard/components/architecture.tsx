@@ -20,13 +20,7 @@ interface Placed {
 }
 
 /** How a project fits together: who calls what, and what each database has inside. */
-export function Architecture({
-  projectRef,
-  resources,
-}: {
-  projectRef: string;
-  resources: Resource[];
-}) {
+export function Architecture({ projectRef, resources }: { projectRef: string; resources: Resource[] }) {
   const router = useRouter();
   const [addons, setAddons] = useState<Record<string, string[]>>({});
 
@@ -35,10 +29,7 @@ export function Architecture({
     resources
       .filter((r) => r.kind === "postgres" && r.status === "active")
       .forEach((r) => {
-        api<{ installed: Array<{ name: string }> }>(
-          "GET",
-          `/p/${projectRef}/postgres/${r.name}/extensions`,
-        )
+        api<{ installed: Array<{ name: string }> }>("GET", `/p/${projectRef}/postgres/${r.name}/extensions`)
           .then((d) =>
             setAddons((a) => ({
               ...a,
@@ -58,10 +49,7 @@ export function Architecture({
     let y = 20;
     return list.map((r) => {
       const a = addons[r.id] ?? [];
-      const h =
-        r.kind === "postgres" && a.length
-          ? 56 + Math.ceil(a.length / 3) * 22
-          : 56;
+      const h = r.kind === "postgres" && a.length ? 56 + Math.ceil(a.length / 3) * 22 : 56;
       const p = { r, x, y, h, addons: a };
       y += h + (ROW - 56);
       return p;
@@ -69,19 +57,14 @@ export function Architecture({
   };
   const dataNodes = placeColumn(data, colX[2]);
   const platformNodes = placeColumn(platform, colX[3]);
-  const bottom = Math.max(
-    260,
-    ...[...dataNodes, ...platformNodes].map((n) => n.y + n.h + 20),
-  );
+  const bottom = Math.max(260, ...[...dataNodes, ...platformNodes].map((n) => n.y + n.h + 20));
   const width = platform.length ? colX[3] + NODE_W + 20 : colX[2] + NODE_W + 20;
   const hasNative = data.some((r) => NATIVE.includes(r.kind));
 
   const clients = [
     { id: "browser", label: "Browser apps", sub: "publishable key" },
     { id: "server", label: "Your server", sub: "secret key" },
-    ...(hasNative
-      ? [{ id: "native", label: "Drivers & tools", sub: "native connections" }]
-      : []),
+    ...(hasNative ? [{ id: "native", label: "Drivers & tools", sub: "native connections" }] : []),
   ].map((c, i) => ({ ...c, x: colX[0], y: 20 + i * 90, h: 56 }));
   const api_ = { x: colX[1], y: 20, h: 76 };
   const edge = { x: colX[1], y: 150, h: 56 };
@@ -96,23 +79,9 @@ export function Architecture({
     <Card className="overflow-hidden">
       <CardHeader title="Architecture" />
       <div className="overflow-x-auto p-4">
-        <svg
-          viewBox={`0 0 ${width} ${bottom}`}
-          style={{ minWidth: Math.min(width, 900) }}
-          className="w-full"
-          role="img"
-          aria-label="Project architecture"
-        >
+        <svg viewBox={`0 0 ${width} ${bottom}`} style={{ minWidth: Math.min(width, 900) }} className="w-full" role="img" aria-label="Project architecture">
           <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
               <path d="M0 0L10 5L0 10z" fill="var(--muted-foreground)" />
             </marker>
           </defs>
@@ -122,77 +91,32 @@ export function Architecture({
             {clients
               .filter((c) => c.id !== "native")
               .map((c) => (
-                <path
-                  key={c.id}
-                  d={curve(c.x + 200, c.y + 28, api_.x, api_.y + 38)}
-                  stroke="var(--border)"
-                  markerEnd="url(#arrow)"
-                />
+                <path key={c.id} d={curve(c.x + 200, c.y + 28, api_.x, api_.y + 38)} stroke="var(--border)" markerEnd="url(#arrow)" />
               ))}
-            {hasNative && (
-              <path
-                d={curve(
-                  clients[2].x + 200,
-                  clients[2].y + 28,
-                  edge.x,
-                  edge.y + 28,
-                )}
-                stroke="var(--border)"
-                markerEnd="url(#arrow)"
-              />
-            )}
+            {hasNative && <path d={curve(clients[2].x + 200, clients[2].y + 28, edge.x, edge.y + 28)} stroke="var(--border)" markerEnd="url(#arrow)" />}
             {platformNodes.map((n) => (
-              <path
-                key={"api" + n.r.id}
-                d={curve(api_.x + NODE_W, api_.y + 38, n.x, n.y + 28)}
-                stroke="var(--border)"
-                strokeOpacity="0.6"
-              />
+              <path key={"api" + n.r.id} d={curve(api_.x + NODE_W, api_.y + 38, n.x, n.y + 28)} stroke="var(--border)" strokeOpacity="0.6" />
             ))}
             {dataNodes.map((n) => (
               <path
                 key={"api" + n.r.id}
                 d={curve(api_.x + NODE_W, api_.y + 38, n.x, n.y + 28)}
-                stroke={
-                  n.r.status === "active" ? "var(--brand)" : "var(--border)"
-                }
-                strokeOpacity={
-                  n.r.runtime === "container" && n.r.awake === false
-                    ? 0.35
-                    : 0.7
-                }
-                strokeDasharray={
-                  n.r.runtime === "container" && n.r.awake === false
-                    ? "4 4"
-                    : undefined
-                }
+                stroke={n.r.status === "active" ? "var(--brand)" : "var(--border)"}
+                strokeOpacity={n.r.runtime === "container" && n.r.awake === false ? 0.35 : 0.7}
+                strokeDasharray={n.r.runtime === "container" && n.r.awake === false ? "4 4" : undefined}
               />
             ))}
             {hasNative &&
               dataNodes
                 .filter((n) => NATIVE.includes(n.r.kind))
-                .map((n) => (
-                  <path
-                    key={"edge" + n.r.id}
-                    d={curve(edge.x + NODE_W, edge.y + 28, n.x, n.y + 40)}
-                    stroke="var(--border)"
-                    strokeDasharray="2 4"
-                  />
-                ))}
+                .map((n) => <path key={"edge" + n.r.id} d={curve(edge.x + NODE_W, edge.y + 28, n.x, n.y + 40)} stroke="var(--border)" strokeDasharray="2 4" />)}
             {platformNodes.flatMap(
               (n) =>
                 (n.r as Resource & { links?: string[] }).links?.map((name) => {
                   const t = byName.get(name);
                   if (!t) return null;
                   return (
-                    <path
-                      key={n.r.id + name}
-                      d={curve(n.x, n.y + 28, t.x + NODE_W, t.y + 28)}
-                      stroke="var(--brand)"
-                      strokeOpacity="0.5"
-                      strokeDasharray="5 4"
-                      markerEnd="url(#arrow)"
-                    />
+                    <path key={n.r.id + name} d={curve(n.x, n.y + 28, t.x + NODE_W, t.y + 28)} stroke="var(--brand)" strokeOpacity="0.5" strokeDasharray="5 4" markerEnd="url(#arrow)" />
                   );
                 }) ?? [],
             )}
@@ -201,27 +125,11 @@ export function Architecture({
           {/* Clients */}
           {clients.map((c) => (
             <g key={c.id}>
-              <rect
-                x={c.x}
-                y={c.y}
-                width={200}
-                height={c.h}
-                rx="12"
-                fill="var(--card)"
-                stroke="var(--border)"
-              />
-              <text
-                x={c.x + 16}
-                y={c.y + 24}
-                className="fill-foreground text-[13px] font-medium"
-              >
+              <rect x={c.x} y={c.y} width={200} height={c.h} rx="12" fill="var(--card)" stroke="var(--border)" />
+              <text x={c.x + 16} y={c.y + 24} className="fill-foreground text-[13px] font-medium">
                 {c.label}
               </text>
-              <text
-                x={c.x + 16}
-                y={c.y + 42}
-                className="fill-muted-foreground font-mono text-[11px]"
-              >
+              <text x={c.x + 16} y={c.y + 42} className="fill-muted-foreground font-mono text-[11px]">
                 {c.sub}
               </text>
             </g>
@@ -229,60 +137,24 @@ export function Architecture({
 
           {/* Gateway */}
           <g>
-            <rect
-              x={api_.x}
-              y={api_.y}
-              width={NODE_W}
-              height={api_.h}
-              rx="12"
-              fill="var(--card)"
-              stroke="var(--brand)"
-            />
-            <text
-              x={api_.x + 16}
-              y={api_.y + 26}
-              className="fill-foreground text-[13px] font-semibold"
-            >
+            <rect x={api_.x} y={api_.y} width={NODE_W} height={api_.h} rx="12" fill="var(--card)" stroke="var(--brand)" />
+            <text x={api_.x + 16} y={api_.y + 26} className="fill-foreground text-[13px] font-semibold">
               Project API
             </text>
-            <text
-              x={api_.x + 16}
-              y={api_.y + 46}
-              className="fill-muted-foreground font-mono text-[11px]"
-            >
+            <text x={api_.x + 16} y={api_.y + 46} className="fill-muted-foreground font-mono text-[11px]">
               /p/{projectRef}
             </text>
-            <text
-              x={api_.x + 16}
-              y={api_.y + 62}
-              className="fill-muted-foreground font-mono text-[10px]"
-            >
+            <text x={api_.x + 16} y={api_.y + 62} className="fill-muted-foreground font-mono text-[10px]">
               keys · rate limits · logs
             </text>
           </g>
           {hasNative && (
             <g>
-              <rect
-                x={edge.x}
-                y={edge.y}
-                width={NODE_W}
-                height={edge.h}
-                rx="12"
-                fill="var(--card)"
-                stroke="var(--border)"
-              />
-              <text
-                x={edge.x + 16}
-                y={edge.y + 24}
-                className="fill-foreground text-[13px] font-medium"
-              >
+              <rect x={edge.x} y={edge.y} width={NODE_W} height={edge.h} rx="12" fill="var(--card)" stroke="var(--border)" />
+              <text x={edge.x + 16} y={edge.y + 24} className="fill-foreground text-[13px] font-medium">
                 Edge (TLS)
               </text>
-              <text
-                x={edge.x + 16}
-                y={edge.y + 42}
-                className="fill-muted-foreground font-mono text-[11px]"
-              >
+              <text x={edge.x + 16} y={edge.y + 42} className="fill-muted-foreground font-mono text-[11px]">
                 wakes sleeping services
               </text>
             </g>
@@ -290,57 +162,20 @@ export function Architecture({
 
           {/* Services */}
           {[...dataNodes, ...platformNodes].map((n) => (
-            <g
-              key={n.r.id}
-              className="cursor-pointer"
-              onClick={() =>
-                router.push(`/projects/${n.r.projectId}/services/${n.r.id}`)
-              }
-            >
-              <rect
-                x={n.x}
-                y={n.y}
-                width={NODE_W}
-                height={n.h}
-                rx="12"
-                fill="var(--card)"
-                stroke="var(--border)"
-              />
+            <g key={n.r.id} className="cursor-pointer" onClick={() => router.push(`/projects/${n.r.projectId}/services/${n.r.id}`)}>
+              <rect x={n.x} y={n.y} width={NODE_W} height={n.h} rx="12" fill="var(--card)" stroke="var(--border)" />
               <foreignObject x={n.x + 10} y={n.y + 10} width="36" height="36">
                 <ServiceLogo kind={n.r.kind} size="sm" className="!size-9" />
               </foreignObject>
-              <text
-                x={n.x + 56}
-                y={n.y + 25}
-                className="fill-foreground text-[13px] font-medium"
-              >
+              <text x={n.x + 56} y={n.y + 25} className="fill-foreground text-[13px] font-medium">
                 {n.r.name}
               </text>
-              <text
-                x={n.x + 56}
-                y={n.y + 42}
-                className="fill-muted-foreground font-mono text-[11px]"
-              >
+              <text x={n.x + 56} y={n.y + 42} className="fill-muted-foreground font-mono text-[11px]">
                 {KIND_LABEL[n.r.kind]}
-                {n.r.runtime === "container"
-                  ? n.r.awake
-                    ? " · awake"
-                    : " · asleep"
-                  : ""}
+                {n.r.runtime === "container" ? (n.r.awake ? " · awake" : " · asleep") : ""}
                 {n.r.status !== "active" ? ` · ${n.r.status}` : ""}
               </text>
-              <circle
-                cx={n.x + NODE_W - 14}
-                cy={n.y + 14}
-                r="3.5"
-                fill={
-                  n.r.status === "active"
-                    ? n.r.awake === false
-                      ? "var(--muted-foreground)"
-                      : "var(--success)"
-                    : "var(--warning)"
-                }
-              />
+              <circle cx={n.x + NODE_W - 14} cy={n.y + 14} r="3.5" fill={n.r.status === "active" ? (n.r.awake === false ? "var(--muted-foreground)" : "var(--success)") : "var(--warning)"} />
               {n.addons.map((a, i) => {
                 const col = i % 3;
                 const row = Math.floor(i / 3);
@@ -348,20 +183,8 @@ export function Architecture({
                 const ay = n.y + 54 + row * 22;
                 return (
                   <g key={a}>
-                    <rect
-                      x={ax}
-                      y={ay}
-                      width="60"
-                      height="17"
-                      rx="5"
-                      fill="var(--muted)"
-                    />
-                    <text
-                      x={ax + 30}
-                      y={ay + 12}
-                      textAnchor="middle"
-                      className="fill-muted-foreground font-mono text-[9.5px]"
-                    >
+                    <rect x={ax} y={ay} width="60" height="17" rx="5" fill="var(--muted)" />
+                    <text x={ax + 30} y={ay + 12} textAnchor="middle" className="fill-muted-foreground font-mono text-[9.5px]">
                       {a.length > 10 ? a.slice(0, 9) + "…" : a}
                     </text>
                   </g>
@@ -370,11 +193,7 @@ export function Architecture({
             </g>
           ))}
           {resources.length === 0 && (
-            <text
-              x={colX[2]}
-              y={60}
-              className="fill-muted-foreground text-[13px]"
-            >
+            <text x={colX[2]} y={60} className="fill-muted-foreground text-[13px]">
               Add a service to see it here.
             </text>
           )}
