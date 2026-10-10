@@ -2,6 +2,7 @@
 
 import { Check, Copy, Eye, EyeOff, Loader2, X } from "lucide-react";
 import { guessLang, highlight, type CodeLang } from "@/lib/highlight";
+import { createPortal } from "react-dom";
 import { toast } from "./toast";
 import { useEffect, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
@@ -209,7 +210,9 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  // Portaled to <body>: an ancestor with a transform or backdrop filter would otherwise
+  // become the containing block and clip the dialog.
+  return createPortal(
     <div
       className="animate-fade-in fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-[10vh] backdrop-blur-sm"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
@@ -223,7 +226,8 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
