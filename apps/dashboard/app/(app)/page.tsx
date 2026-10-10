@@ -99,10 +99,11 @@ export default function HomePage() {
       <section className="relative mb-12">
         <div className="relative flex flex-wrap items-end justify-between gap-6">
           <Greeting name={firstName} />
-          <div className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1.5 font-mono text-xs backdrop-blur">
-            <span className={`led ${status?.healthy === false ? "text-warning" : "text-success"}`} data-live="true" />
-            {status?.healthy === false ? "a data host needs attention" : "all systems normal"}
-          </div>
+          {status?.healthy === false && (
+            <div className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1.5 font-mono text-xs">
+              <span className="led text-warning" data-live="true" />a data host needs attention
+            </div>
+          )}
         </div>
 
         <div className="relative mt-10 grid gap-3 sm:grid-cols-3">

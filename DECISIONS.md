@@ -30,3 +30,4 @@ One line per decision: date, choice, reason.
 - 2026-10-06: Repository follows a monorepo layout: `server/`, `apps/dashboard`, `packages/sdk-js`, `deploy/`, `docs/`, `examples/`, `scripts/`.
 - 2026-10-06: Docs are Markdown in `docs/` with `nav.json`, rendered by the dashboard at `/docs` (marked plus shiki at build time). No separate docs app.
 - 2026-10-06: Dashboard style is plain black and blue. Service logos are neutral monochrome tiles. Owner's choice, replacing an earlier multicolor look.
+- 2026-10-10: Backup services are meant to write to the owner's own bucket. Cloudflare R2 is a first-class destination (account ID, bucket, keys; endpoint derived). Saving a bucket destination test-writes to it. Local backups stay as a fallback with a warning. Owner's choice.

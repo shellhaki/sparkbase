@@ -240,11 +240,11 @@ func TestCronMonitorAndBackupServices(t *testing.T) {
 			}
 			time.Sleep(200 * time.Millisecond)
 		}
-		// S3 secrets are never returned.
-		sec.Do("PATCH", pre+"/backup/nightly/settings", map[string]any{"destination": map[string]any{"type": "s3", "endpoint": "https://s3.example.com", "bucket": "b", "accessKey": "AK", "secretKey": "very-secret"}}).Must(t, 200)
-		got := sec.Do("GET", pre+"/backup/nightly/settings", nil).Must(t, 200)
-		if strings.Contains(string(got.Raw), "very-secret") || got.Get("settings", "hasSecret") != true {
-			t.Fatalf("settings leak: %s", got.Raw)
+		// Bucket destinations are checked before they are saved.
+		sec.Do("PATCH", pre+"/backup/nightly/settings", map[string]any{"destination": map[string]any{"type": "r2", "accountId": "not-an-account", "bucket": "b", "accessKey": "AK", "secretKey": "s"}}).Must(t, 422)
+		sec.Do("PATCH", pre+"/backup/nightly/settings", map[string]any{"destination": map[string]any{"type": "s3", "endpoint": "http://127.0.0.1:1", "bucket": "b", "accessKey": "AK", "secretKey": "s"}}).Must(t, 422)
+		if got := sec.Do("GET", pre+"/backup/nightly/settings", nil).Must(t, 200); got.Get("settings", "destination", "type") != "local" {
+			t.Fatalf("a failed check changed the destination: %s", got.Raw)
 		}
 	})
 }

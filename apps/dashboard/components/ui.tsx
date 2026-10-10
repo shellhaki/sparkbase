@@ -84,6 +84,17 @@ export function Field({ label, hint, children }: { label: string; hint?: ReactNo
   );
 }
 
+/** Like Field, for a group of buttons: a <label> would hand its name and clicks to the first button. */
+export function Group({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+  return (
+    <div role="group" aria-label={label} className="space-y-1.5">
+      <span className="block text-sm font-medium">{label}</span>
+      {children}
+      {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
+    </div>
+  );
+}
+
 export function Card({ className, children, style }: { className?: string; children: ReactNode; style?: CSSProperties }) {
   return (
     <div className={cn("rounded-2xl border border-border bg-card/80 backdrop-blur-sm", className)} style={style}>

@@ -23,6 +23,8 @@ function Profile() {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [changingPw, setChangingPw] = useState(false);
+  const dirty = name !== (user.name ?? "") || changingPw;
 
   return (
     <Card>
@@ -37,6 +39,7 @@ function Profile() {
           try {
             await api("PATCH", "/v1/me", { name, ...(pw.next ? { currentPassword: pw.current, newPassword: pw.next } : {}) });
             setPw({ current: "", next: "" });
+            setChangingPw(false);
             setMsg("Saved");
             refresh();
           } catch (err) {
@@ -49,20 +52,51 @@ function Profile() {
         <Field label="Name">
           <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
         </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Current password">
-            <Input type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
-          </Field>
-          <Field label="New password" hint="Leave empty to keep your password.">
-            <Input type="password" autoComplete="new-password" minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
-          </Field>
-        </div>
+        {changingPw && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Current password">
+              <Input type="password" autoComplete="current-password" required autoFocus value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+            </Field>
+            <Field label="New password" hint="At least 8 characters.">
+              <Input type="password" autoComplete="new-password" required minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+            </Field>
+          </div>
+        )}
         <ErrorText error={error} />
-        <div className="flex items-center justify-end gap-3">
-          {msg && <span className="text-sm text-success">{msg}</span>}
-          <Button type="submit" loading={busy}>
-            Save
-          </Button>
+        <div className="flex items-center justify-between gap-3">
+          {changingPw ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setChangingPw(false);
+                setPw({ current: "", next: "" });
+              }}
+            >
+              Keep current password
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setChangingPw(true);
+                setMsg(null);
+              }}
+            >
+              Change password
+            </Button>
+          )}
+          <div className="flex items-center gap-3">
+            {msg && !dirty && <span className="text-sm text-success">{msg}</span>}
+            {dirty && (
+              <Button type="submit" loading={busy}>
+                Save
+              </Button>
+            )}
+          </div>
         </div>
       </form>
     </Card>

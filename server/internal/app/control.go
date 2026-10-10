@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -290,13 +291,17 @@ func (a *App) alertWebhook(ctx context.Context, r *store.Resource, payload map[s
 
 // BackupDestination is where a backup service stores dumps.
 type BackupDestination struct {
-	Type      string `json:"type"` // local or s3
-	Endpoint  string `json:"endpoint,omitempty"`
-	Bucket    string `json:"bucket,omitempty"`
-	Region    string `json:"region,omitempty"`
-	Prefix    string `json:"prefix,omitempty"`
-	AccessKey string `json:"accessKey,omitempty"`
-	SecretEnc string `json:"secretEnc,omitempty"` // encrypted, never returned
+	Type string `json:"type"` // local or s3
+	// Provider is "r2" for Cloudflare R2; the endpoint is then derived from the account.
+	Provider     string `json:"provider,omitempty"`
+	AccountID    string `json:"accountId,omitempty"`
+	Jurisdiction string `json:"jurisdiction,omitempty"` // R2 only: "" or "eu"
+	Endpoint     string `json:"endpoint,omitempty"`
+	Bucket       string `json:"bucket,omitempty"`
+	Region       string `json:"region,omitempty"`
+	Prefix       string `json:"prefix,omitempty"`
+	AccessKey    string `json:"accessKey,omitempty"`
+	SecretEnc    string `json:"secretEnc,omitempty"` // encrypted, never returned
 }
 
 // BackupSettings are a backup service's settings.
@@ -341,6 +346,41 @@ func (a *App) backupS3(bs BackupSettings) (*s3.Client, string, string, error) {
 		prefix += "/"
 	}
 	return &s3.Client{Endpoint: d.Endpoint, Region: region, AccessKey: d.AccessKey, SecretKey: secret}, d.Bucket, prefix, nil
+}
+
+var r2Account = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// R2Endpoint is the S3 endpoint of a Cloudflare account's R2 buckets.
+func R2Endpoint(accountID, jurisdiction string) (string, error) {
+	if !r2Account.MatchString(accountID) {
+		return "", errors.New("the R2 account ID is 32 hex characters, shown on the R2 overview page")
+	}
+	switch jurisdiction {
+	case "":
+		return "https://" + accountID + ".r2.cloudflarestorage.com", nil
+	case "eu":
+		return "https://" + accountID + ".eu.r2.cloudflarestorage.com", nil
+	}
+	return "", errors.New(`jurisdiction must be empty or "eu"`)
+}
+
+// CheckBackupDestination writes and deletes a small object, so wrong keys or
+// a missing bucket show up when the settings are saved, not at 3 a.m.
+func (a *App) CheckBackupDestination(ctx context.Context, bs BackupSettings) error {
+	c, bucket, prefix, err := a.backupS3(bs)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	key := prefix + ".sparkbase-check"
+	if err := c.Put(ctx, bucket, key, strings.NewReader("ok"), 2, "text/plain"); err != nil {
+		return fmt.Errorf("could not write to bucket %q: %w", bucket, err)
+	}
+	if err := c.Delete(ctx, bucket, key); err != nil {
+		return fmt.Errorf("could write but not delete in bucket %q: %w", bucket, err)
+	}
+	return nil
 }
 
 // readBackup fetches a sealed dump from wherever it was stored.

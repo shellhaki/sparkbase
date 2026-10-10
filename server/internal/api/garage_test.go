@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shellhaki/sparkbase/server/internal/s3"
 	"github.com/shellhaki/sparkbase/server/internal/testenv"
@@ -140,4 +141,85 @@ func TestGarageStorage(t *testing.T) {
 			t.Fatal("deleted bucket still reachable")
 		}
 	})
+}
+
+// A backup service writing to the owner's own bucket, then restoring from it.
+// A Garage storage service stands in for R2 or any S3 bucket.
+func TestBackupToOwnBucket(t *testing.T) {
+	e := testenv.New(t, testenv.WithGarage())
+	ctx := context.Background()
+	admin := e.Admin()
+	admin.Do("PATCH", "/v1/admin/settings", map[string]any{"allowPrivateTargets": true}).Must(t, 200)
+	p := e.Project(admin, "bk")
+	pgID := e.Service(admin, p, "postgres", "main")
+	bucketID := e.Service(admin, p, "storage", "offsite")
+	e.Service(admin, p, "backup", "nightly")
+	sec := e.ProjectClient(p.Secret)
+	pre := "/p/" + p.Ref
+
+	sec.Do("POST", pre+"/postgres/main/query", map[string]any{"sql": "create table notes (body text)"}).Must(t, 200)
+	sec.Do("POST", pre+"/postgres/main/query", map[string]any{"sql": "insert into notes values ('keep me')"}).Must(t, 200)
+
+	own, bucket := nativeS3(t, admin, bucketID)
+	dest := map[string]any{"type": "s3", "endpoint": own.Endpoint, "region": own.Region, "bucket": bucket, "prefix": "sparkbase", "accessKey": own.AccessKey}
+
+	// Wrong secret: refused at save time.
+	bad := map[string]any{"destination": merge(dest, map[string]any{"secretKey": "wrong"})}
+	sec.Do("PATCH", pre+"/backup/nightly/settings", bad).Must(t, 422)
+
+	set := sec.Do("PATCH", pre+"/backup/nightly/settings", map[string]any{"targets": []string{"main"}, "destination": merge(dest, map[string]any{"secretKey": own.SecretKey})}).Must(t, 200)
+	if strings.Contains(string(set.Raw), own.SecretKey) || set.Get("settings", "hasSecret") != true {
+		t.Fatalf("settings leak: %s", set.Raw)
+	}
+	// Saving again without the secret keeps it.
+	sec.Do("PATCH", pre+"/backup/nightly/settings", map[string]any{"destination": dest}).Must(t, 200)
+
+	sec.Do("POST", pre+"/backup/nightly/run", nil).Must(t, 202)
+	var backupID string
+	deadline := time.Now().Add(60 * time.Second)
+	for backupID == "" {
+		for _, x := range sec.Do("GET", pre+"/backup/nightly/runs", nil).Must(t, 200).Get("runs").([]any) {
+			b := x.(map[string]any)["backup"].(map[string]any)
+			if b["status"] == "done" {
+				backupID = b["id"].(string)
+			}
+			if b["status"] == "failed" {
+				t.Fatalf("backup failed: %v", b)
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("backup did not finish")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	objs, _, err := own.List(ctx, bucket, "sparkbase/", "", 100)
+	if err != nil || len(objs) != 1 || !strings.HasSuffix(objs[0].Key, ".dump.enc") {
+		t.Fatalf("objects in the bucket: %v %v", objs, err)
+	}
+
+	sec.Do("POST", pre+"/postgres/main/query", map[string]any{"sql": "delete from notes"}).Must(t, 200)
+	admin.Do("POST", "/v1/resources/"+pgID+"/backups/"+backupID+"/restore", nil).Must(t, 204)
+	deadline = time.Now().Add(60 * time.Second)
+	for {
+		r := sec.Do("POST", pre+"/postgres/main/query", map[string]any{"sql": "select body from notes"})
+		if r.Status == 200 && strings.Contains(string(r.Raw), "keep me") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("restore from the bucket did not bring the row back: %s", r.Raw)
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+func merge(a, b map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		out[k] = v
+	}
+	return out
 }

@@ -403,6 +403,9 @@ func (s *Server) backupRoutes() {
 		d := bs.Destination
 		hasSecret := d.SecretEnc != ""
 		d.SecretEnc = ""
+		if d.Provider == "r2" {
+			d.Type = "r2"
+		}
 		return map[string]any{"schedule": bs.Schedule, "retentionDays": bs.RetentionDays, "targets": bs.Targets,
 			"destination": d, "hasSecret": hasSecret, "nextRunAt": bs.NextRunAt}
 	}
@@ -421,13 +424,15 @@ func (s *Server) backupRoutes() {
 			RetentionDays *int     `json:"retentionDays"`
 			Targets       []string `json:"targets"`
 			Destination   *struct {
-				Type      string `json:"type"`
-				Endpoint  string `json:"endpoint"`
-				Bucket    string `json:"bucket"`
-				Region    string `json:"region"`
-				Prefix    string `json:"prefix"`
-				AccessKey string `json:"accessKey"`
-				SecretKey string `json:"secretKey"`
+				Type         string `json:"type"`
+				AccountID    string `json:"accountId"`
+				Jurisdiction string `json:"jurisdiction"`
+				Endpoint     string `json:"endpoint"`
+				Bucket       string `json:"bucket"`
+				Region       string `json:"region"`
+				Prefix       string `json:"prefix"`
+				AccessKey    string `json:"accessKey"`
+				SecretKey    string `json:"secretKey"`
 			} `json:"destination"`
 		}
 		if err := httpx.Decode(r, &in, 0); err != nil {
@@ -467,21 +472,34 @@ func (s *Server) backupRoutes() {
 			switch d.Type {
 			case "local":
 				bs.Destination = app.BackupDestination{Type: "local"}
-			case "s3":
-				if err := netguard.CheckURL(d.Endpoint); err != nil || d.Bucket == "" || d.AccessKey == "" {
-					return httpx.Invalid("S3 destinations need endpoint, bucket and accessKey")
+			case "s3", "r2":
+				nd := app.BackupDestination{Type: "s3", Endpoint: d.Endpoint, Bucket: d.Bucket, Region: d.Region, Prefix: d.Prefix, AccessKey: d.AccessKey}
+				if d.Type == "r2" {
+					ep, err := app.R2Endpoint(strings.ToLower(strings.TrimSpace(d.AccountID)), d.Jurisdiction)
+					if err != nil {
+						return httpx.Invalid(err.Error())
+					}
+					nd.Provider, nd.AccountID, nd.Jurisdiction, nd.Endpoint, nd.Region = "r2", strings.ToLower(strings.TrimSpace(d.AccountID)), d.Jurisdiction, ep, "auto"
 				}
-				secretEnc := bs.Destination.SecretEnc
+				if err := netguard.CheckURL(nd.Endpoint); err != nil || nd.Bucket == "" || nd.AccessKey == "" {
+					return httpx.Invalid("bucket destinations need an endpoint, a bucket and an access key")
+				}
+				// Keep the stored secret when the same bucket is saved again without one.
+				old := bs.Destination
 				if d.SecretKey != "" {
-					secretEnc = base64.StdEncoding.EncodeToString(s.Box.SealString(d.SecretKey))
+					nd.SecretEnc = base64.StdEncoding.EncodeToString(s.Box.SealString(d.SecretKey))
+				} else if old.Type == "s3" && old.Endpoint == nd.Endpoint && old.AccessKey == nd.AccessKey {
+					nd.SecretEnc = old.SecretEnc
 				}
-				if secretEnc == "" {
+				if nd.SecretEnc == "" {
 					return httpx.Invalid("secretKey is required")
 				}
-				bs.Destination = app.BackupDestination{Type: "s3", Endpoint: d.Endpoint, Bucket: d.Bucket, Region: d.Region,
-					Prefix: d.Prefix, AccessKey: d.AccessKey, SecretEnc: secretEnc}
+				bs.Destination = nd
+				if err := s.CheckBackupDestination(r.Context(), bs); err != nil {
+					return httpx.Invalid(err.Error())
+				}
 			default:
-				return httpx.Invalid("destination type must be local or s3")
+				return httpx.Invalid("destination type must be local, s3 or r2")
 			}
 		}
 		if err := s.Store.SetResourceSettings(r.Context(), res.ID, bs); err != nil {
