@@ -1,0 +1,469 @@
+@import "tailwindcss";
+
+/*
+ * Sparkbase palette, the same tokens as the dashboard (apps/dashboard/app/globals.css).
+ * The landing page is dark only.
+ */
+:root {
+  --font-inter: "Inter";
+  --font-sora: "Sora";
+  --font-jetbrains: "JetBrains Mono";
+  --brand: #2d57fb;
+  --brand-hover: #4a6dfc;
+  --on-brand: #ffffff;
+
+  --background: #0a0a0b;
+  --foreground: #f5f5f2;
+  --card: #141416;
+  --muted: #1c1c20;
+  --muted-foreground: #9a9aa2;
+  --accent: #232328;
+  --border: #1f1f24;
+  --input: #26262c;
+  --destructive: #ff7a7a;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --code-bg: #0f0f12;
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-on-brand: var(--on-brand);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-code: var(--code-bg);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 35%, transparent);
+}
+
+/* Quiet scrollbars that match the theme. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent) transparent;
+  }
+}
+
+/* Motion */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@keyframes progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out both;
+}
+.animate-pop-in {
+  animation: pop-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.skeleton {
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, var(--muted) 25%, var(--accent) 50%, var(--muted) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.pulse-ring {
+  animation: pulse-ring 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+.progress-bar {
+  animation: progress 1.1s ease-in-out infinite;
+}
+
+/* Lift interactive cards slightly on hover. */
+.card-hover {
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --grid-dot: color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+
+/* Dot grid behind the workspace, fading out toward the bottom. */
+.dot-grid {
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, black, transparent 520px);
+}
+
+/* Soft colored light behind hero areas. */
+.aurora {
+  position: absolute;
+  inset: -120px -80px auto -80px;
+  height: 380px;
+  pointer-events: none;
+  display: none;
+}
+
+/* Rotating greeting: blur crossfade masks the swap between words. */
+.greet-word {
+  display: inline-block;
+  transition:
+    opacity 380ms var(--ease-out),
+    transform 380ms var(--ease-out),
+    filter 380ms var(--ease-out);
+}
+.greet-word[data-state="out"] {
+  opacity: 0;
+  transform: translateY(-10px);
+  filter: blur(6px);
+}
+.greet-word[data-state="in"] {
+  opacity: 1;
+  transform: none;
+  filter: blur(0);
+}
+
+/* Status light. */
+.led {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: currentColor;
+}
+.led[data-live="true"]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid currentColor;
+  animation: pulse-ring 1.8s var(--ease-out) infinite;
+}
+
+/* Toasts enter from below and leave the same way. */
+.toast {
+  transition:
+    opacity 220ms var(--ease-out),
+    transform 220ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lift:hover {
+    transform: translateY(-2px);
+  }
+}
+.lift {
+  transition:
+    transform 200ms var(--ease-out),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Documentation pages */
+.docs-prose {
+  font-size: 15.5px;
+  line-height: 1.75;
+  color: color-mix(in srgb, var(--foreground) 88%, transparent);
+}
+.docs-prose > * + * {
+  margin-top: 1.15em;
+}
+.docs-prose h2 {
+  margin-top: 2.6em;
+  font-family: var(--font-sora), var(--font-inter), sans-serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  scroll-margin-top: 5rem;
+}
+.docs-prose h3 {
+  margin-top: 2em;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  scroll-margin-top: 5rem;
+}
+.docs-prose h2 .anchor,
+.docs-prose h3 .anchor {
+  color: inherit;
+  text-decoration: none;
+}
+.docs-prose a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  text-underline-offset: 3px;
+}
+.docs-prose a:hover {
+  text-decoration-color: var(--brand);
+}
+.docs-prose strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.docs-prose ul,
+.docs-prose ol {
+  padding-left: 1.3em;
+}
+.docs-prose ul {
+  list-style: disc;
+}
+.docs-prose ol {
+  list-style: decimal;
+}
+.docs-prose li + li {
+  margin-top: 0.35em;
+}
+.docs-prose li::marker {
+  color: var(--muted-foreground);
+}
+.docs-prose :not(pre) > code {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  padding: 0.12em 0.4em;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 0.86em;
+  color: var(--foreground);
+}
+.docs-prose .code-block {
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #0f0f12;
+}
+.docs-prose .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1f1f24;
+  padding: 0.45rem 0.9rem;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 11px;
+  color: #8a90a0;
+}
+.docs-prose .code-head .copy {
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  color: #8a90a0;
+}
+.docs-prose .code-head .copy:hover {
+  background: #1f1f24;
+  color: #e4e6ee;
+}
+.docs-prose pre {
+  overflow-x: auto;
+  padding: 1rem 1.1rem;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  background: transparent !important;
+}
+.docs-prose .table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.docs-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.docs-prose th {
+  background: var(--card);
+  text-align: left;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.docs-prose th,
+.docs-prose td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.6rem 0.9rem;
+  vertical-align: top;
+}
+.docs-prose tr:last-child td {
+  border-bottom: 0;
+}
+.docs-prose .callout {
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, var(--border));
+  background: color-mix(in srgb, var(--brand) 7%, transparent);
+  padding: 0.9rem 1.1rem;
+}
+.docs-prose .callout strong:first-child {
+  color: var(--brand);
+  margin-right: 0.35em;
+}
+
+/* Highlighted code rendered at build time. */
+.code-surface pre.shiki {
+  background: transparent !important;
+  margin: 0;
+  overflow-x: auto;
+  padding: 1.1rem 1.25rem;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* Landing */
+.hero-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black 40%, transparent 100%);
+}
+.shot-fade {
+  mask-image: linear-gradient(to bottom, black 70%, transparent);
+}
+.eyebrow {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details[open] .faq-plus {
+  transform: rotate(45deg);
+}
+.faq-plus {
+  transition: transform 200ms var(--ease-out);
+}
+
+/* Scale-to-zero timeline: bars grow in when scrolled into view. */
+@keyframes bar-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.awake-bar {
+  transform-origin: left;
+  animation: bar-in 900ms var(--ease-out) both;
+}

@@ -62,6 +62,7 @@ First run: open http://localhost:3000/setup and create your account. The first a
 | --- | --- |
 | `server/` | Go: API, worker, container engine and drivers (`cmd/sparkbase-server`) and the CLI (`cmd/sparkbase`) |
 | `apps/dashboard/` | Next.js dashboard on Bun, including the `/docs` site |
+| `apps/landing/` | Public landing page and docs, deployable to Vercel |
 | `packages/sdk-js/` | `@sparkbase/sdk` |
 | `scripts/` | Dev services, dev runner, test helpers |
 | `deploy/` | Docker install: compose, Traefik, Postgres host, Garage |

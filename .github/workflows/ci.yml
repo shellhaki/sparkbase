@@ -40,6 +40,9 @@ jobs:
         run: |
           cd apps/dashboard && bun install && bun run build && cd ../..
           PATH=/usr/lib/postgresql/18/bin:$PATH scripts/with-server.sh scripts/e2e-dashboard.sh
+      - name: Landing page build
+        working-directory: apps/landing
+        run: bun install && bun run typecheck && bun run build
 
   docker-install:
     runs-on: ubuntu-24.04
