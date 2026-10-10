@@ -2,10 +2,11 @@ package drivers
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // Older Redis versions lack some commands we deny (WAITAOF arrived in 7.2).
@@ -27,17 +28,18 @@ func TestSetUserRulesSkipsUnknownCommands(t *testing.T) {
 	if err := setUserRules(ctx, rc, user, rules); err != nil {
 		t.Fatalf("setUserRules: %v", err)
 	}
-	got, err := rc.Do(ctx, "acl", "getuser", user).Result()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The known denials are still in place.
-	text := fmt.Sprint(got)
-	for _, want := range []string{"-keys", "-flushall", "-acl"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("%s missing from %s", want, text)
+	// The known denials still hold: the user cannot list or wipe keys.
+	uc := redis.NewClient(&redis.Options{Addr: "127.0.0.1:63799", Username: user, Password: "pw-for-test-only-123", DisableIdentity: true})
+	defer uc.Close()
+	for _, cmd := range [][]any{{"keys", "*"}, {"flushall"}, {"acl", "list"}} {
+		if err := uc.Do(ctx, cmd...).Err(); err == nil || !strings.Contains(err.Error(), "NOPERM") {
+			t.Fatalf("%v was not refused: %v", cmd, err)
 		}
 	}
+	if err := uc.Set(ctx, "sbtest:k", "v", 0).Err(); err != nil {
+		t.Fatalf("own prefix write refused: %v", err)
+	}
+	uc.Del(ctx, "sbtest:k")
 	// A category typo is not silently dropped.
 	if err := setUserRules(ctx, rc, user, []any{"reset", "-@no_such_category"}); err == nil {
 		t.Fatal("unknown category was accepted")

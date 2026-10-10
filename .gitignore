@@ -154,3 +154,6 @@ vite.config.ts.timestamp-*
 .env.local
 /server/bin/
 .next/
+
+# Launch video work (brag / Hyperframes)
+brag-output/
