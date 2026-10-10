@@ -68,7 +68,7 @@ First run: open http://localhost:3000/setup and create your account. The first a
 | `deploy/` | Docker install: compose, Traefik, Postgres host, Garage |
 | `docs/` | Documentation (Markdown plus `nav.json`) |
 | `examples/` | Example apps |
-| `spec.md`, `agent.md`, `DECISIONS.md` | Product spec, build guide, decision log |
+| `DECISIONS.md` | Decision log |
 | `waitlist/` | Landing page (separate app) |
 
 ## Tests

@@ -22,7 +22,7 @@ scripts/e2e-compose.sh                                   # full Docker install t
 
 ## Rules of the codebase
 
-- Read `spec.md` before changing behavior; record choices in `DECISIONS.md`.
+- Read the docs in `docs/` before changing behavior; record choices in `DECISIONS.md`.
 - No ORM, no query builder. Hand-written, parameterized SQL.
 - Every service keeps its own credentials. A change that weakens isolation needs a test in the isolation suites that fails without the fix.
 - Never log secrets: passwords, keys, tokens, connection strings.
