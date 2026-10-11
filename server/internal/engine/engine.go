@@ -282,10 +282,9 @@ func (e *Engine) Wake(ctx context.Context, r *store.Resource) error {
 	if ok && time.Since(seen) < 5*time.Second {
 		return nil
 	}
-	if running, err := e.Running(ctx, r); err == nil && running {
-		e.markRunning(r.ID)
-		return nil
-	}
+	// Always go through Ensure, even when Docker says the container is
+	// running: it may have just been started by another caller and not accept
+	// connections yet. Ensure holds the per-service lock and waits until ready.
 	if err := e.Ensure(ctx, r); err != nil {
 		return err
 	}
